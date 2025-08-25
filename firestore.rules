@@ -1,0 +1,39 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // User documents - both regular and quick start users
+    match /users/{userId} {
+      // Users can read/write their own data
+      allow read, write: if isOwner(userId);
+      
+      // Allow authenticated users to read user documents for leaderboards etc
+      allow read: if isAuthenticated();
+      
+      // User practice sessions
+      match /practice_sessions/{sessionId} {
+        allow read, write: if isOwner(userId);
+      }
+      
+      // Topic progress tracking
+      match /topic_progress/{topicId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+    
+    // Allow all authenticated users to read/write their own data
+    match /{document=**} {
+      allow read, write: if isAuthenticated();
+    }
+  }
+}

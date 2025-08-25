@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "877108895509",
+    "firebase_url": "https://learnmath-624b0-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "learnmath-624b0",
+    "storage_bucket": "learnmath-624b0.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:877108895509:android:a8db4958f297e0a117d31c",
+        "android_client_info": {
+          "package_name": "com.example.learnmath_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC-hkzJgWtIbW--6jNbGE_hdTBbdEpqvDs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
