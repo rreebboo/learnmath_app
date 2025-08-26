@@ -158,4 +158,41 @@ class ProgressionService {
     await prefs.remove(_unlockedTopicsKey);
     await prefs.remove(_perfectScoresKey);
   }
+
+  // Reset progression and start fresh (only keeps first topic unlocked)
+  Future<void> resetToBeginning() async {
+    final prefs = await SharedPreferences.getInstance();
+    
+    // Clear all perfect scores
+    await prefs.remove(_perfectScoresKey);
+    
+    // Reset unlocked topics to only the first topic (addition)
+    Set<String> defaultUnlocked = {'addition'};
+    await setUnlockedTopics(defaultUnlocked);
+  }
+
+  // Check if user has any progress
+  Future<bool> hasAnyProgress() async {
+    final prefs = await SharedPreferences.getInstance();
+    List<String> perfectScores = prefs.getStringList(_perfectScoresKey) ?? [];
+    Set<String> unlockedTopics = await getUnlockedTopics();
+    
+    // User has progress if they have perfect scores OR more than just the first topic unlocked
+    return perfectScores.isNotEmpty || unlockedTopics.length > 1;
+  }
+
+  // Get current progress summary
+  Future<Map<String, dynamic>> getProgressSummary() async {
+    Set<String> unlockedTopics = await getUnlockedTopics();
+    final prefs = await SharedPreferences.getInstance();
+    List<String> perfectScores = prefs.getStringList(_perfectScoresKey) ?? [];
+    
+    return {
+      'unlockedTopicsCount': unlockedTopics.length,
+      'perfectScoresCount': perfectScores.length,
+      'hasProgress': await hasAnyProgress(),
+      'unlockedTopics': unlockedTopics.toList(),
+      'perfectScores': perfectScores,
+    };
+  }
 }
