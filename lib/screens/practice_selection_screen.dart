@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'practice_screen.dart';
+import 'adaptive_quiz_screen.dart';
 
 class PracticeSelectionScreen extends StatelessWidget {
   const PracticeSelectionScreen({super.key});
@@ -52,6 +53,25 @@ class PracticeSelectionScreen extends StatelessWidget {
                     context,
                     MaterialPageRoute(
                       builder: (context) => const SoloPracticeScreen(),
+                    ),
+                  );
+                },
+              ),
+              
+              const SizedBox(height: 20),
+              
+              // Adaptive Quiz Card
+              _buildPracticeCard(
+                context,
+                'Adaptive Quiz',
+                'AI-powered questions that adapt to your skill level',
+                const Color(0xFF9C27B0),
+                Icons.psychology,
+                () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const AdaptiveQuizScreen(),
                     ),
                   );
                 },

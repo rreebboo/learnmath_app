@@ -73,6 +73,9 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 360;
+    
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
@@ -82,17 +85,21 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
           icon: const Icon(Icons.arrow_back, color: Color(0xFF2C3E50)),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
+        title: Text(
           'Friends',
           style: TextStyle(
-            color: Color(0xFF2C3E50),
-            fontSize: 20,
+            color: const Color(0xFF2C3E50),
+            fontSize: isSmallScreen ? 18 : 20,
             fontWeight: FontWeight.bold,
           ),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.person_add, color: Color(0xFF5B9EF3)),
+            icon: Icon(
+              Icons.person_add, 
+              color: const Color(0xFF5B9EF3),
+              size: isSmallScreen ? 20 : 24,
+            ),
             onPressed: () => _showAddFriendDialog(),
           ),
         ],
@@ -101,10 +108,18 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
           labelColor: const Color(0xFF5B9EF3),
           unselectedLabelColor: Colors.grey[600],
           indicatorColor: const Color(0xFF5B9EF3),
-          tabs: const [
-            Tab(text: 'Friends'),
-            Tab(text: 'Requests'),
-            Tab(text: 'Find'),
+          labelStyle: TextStyle(
+            fontSize: isSmallScreen ? 12 : 14,
+            fontWeight: FontWeight.w600,
+          ),
+          unselectedLabelStyle: TextStyle(
+            fontSize: isSmallScreen ? 12 : 14,
+            fontWeight: FontWeight.normal,
+          ),
+          tabs: [
+            Tab(text: isSmallScreen ? 'Friends' : 'Friends'),
+            Tab(text: isSmallScreen ? 'Requests' : 'Requests'),
+            Tab(text: isSmallScreen ? 'Find' : 'Find'),
           ],
         ),
       ),
@@ -142,8 +157,11 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
         }
 
         final friends = snapshot.data!;
+        final screenWidth = MediaQuery.of(context).size.width;
+        final isSmallScreen = screenWidth < 360;
+        
         return ListView.builder(
-          padding: const EdgeInsets.all(20),
+          padding: EdgeInsets.all(isSmallScreen ? 12 : 20),
           itemCount: friends.length,
           itemBuilder: (context, index) {
             final friend = friends[index];
@@ -177,8 +195,11 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
         }
 
         final requests = snapshot.data!;
+        final screenWidth = MediaQuery.of(context).size.width;
+        final isSmallScreen = screenWidth < 360;
+        
         return ListView.builder(
-          padding: const EdgeInsets.all(20),
+          padding: EdgeInsets.all(isSmallScreen ? 12 : 20),
           itemCount: requests.length,
           itemBuilder: (context, index) {
             final request = requests[index];
@@ -190,8 +211,11 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
   }
 
   Widget _buildFindTab() {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 360;
+    
     return Padding(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(isSmallScreen ? 12 : 20),
       child: Column(
         children: [
           // Search Bar
@@ -251,206 +275,169 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
   }
 
   Widget _buildFriendCard(Map<String, dynamic> friend) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          // Avatar with online status
-          Stack(
-            children: [
-              Container(
-                width: 50,
-                height: 50,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF7ED321), Color(0xFF9ACD32)],
-                  ),
-                ),
-                child: Center(
-                  child: Text(
-                    friend['avatar'] ?? '🦊',
-                    style: const TextStyle(fontSize: 24),
-                  ),
-                ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final screenWidth = MediaQuery.of(context).size.width;
+        final isSmallScreen = screenWidth < 360;
+        final isMediumScreen = screenWidth < 500;
+        
+        return Container(
+          margin: EdgeInsets.only(bottom: isSmallScreen ? 8 : 12),
+          padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(15),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
               ),
-              if (friend['isOnline'] == true)
-                Positioned(
-                  bottom: 0,
-                  right: 0,
-                  child: Container(
-                    width: 16,
-                    height: 16,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF7ED321),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 2),
-                    ),
-                  ),
-                ),
             ],
           ),
-          const SizedBox(width: 15),
-
-          // Friend Info
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  friend['name'] ?? 'Unknown',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF2C3E50),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.emoji_events,
-                      size: 14,
-                      color: Colors.grey[600],
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${friend['totalScore'] ?? 0} pts • ${friend['level'] ?? 'Beginner'}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
+          child: Row(
+            children: [
+              // Avatar with online status
+              Stack(
+                children: [
+                  Container(
+                    width: isSmallScreen ? 40 : 50,
+                    height: isSmallScreen ? 40 : 50,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        colors: [Color(0xFF7ED321), Color(0xFF9ACD32)],
                       ),
                     ),
-                  ],
-                ),
-                if (friend['isOnline'] != true)
-                  Text(
-                    'Last seen recently',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.grey[500],
+                    child: Center(
+                      child: Text(
+                        friend['avatar'] ?? '🦊',
+                        style: TextStyle(fontSize: isSmallScreen ? 20 : 24),
+                      ),
                     ),
                   ),
-              ],
-            ),
-          ),
-
-          // Challenge Button
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFFE8B4FF), Color(0xFFC490FF)],
+                  if (friend['isOnline'] == true)
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: Container(
+                        width: isSmallScreen ? 12 : 16,
+                        height: isSmallScreen ? 12 : 16,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF7ED321),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                        ),
+                      ),
+                    ),
+                ],
               ),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: GestureDetector(
-              onTap: () => _challengeFriend(friend),
-              child: const Text(
-                'Challenge',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
+              SizedBox(width: isSmallScreen ? 10 : 15),
 
-          // More Options
-          PopupMenuButton<String>(
-            icon: Icon(Icons.more_vert, color: Colors.grey[400]),
-            onSelected: (value) {
-              if (value == 'remove') {
-                _confirmRemoveFriend(friend);
-              }
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'remove',
-                child: Row(
-                  children: [
-                    Icon(Icons.person_remove, color: Colors.red),
-                    SizedBox(width: 8),
-                    Text('Remove Friend'),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRequestCard(Map<String, dynamic> request) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: const Color(0xFF5B9EF3).withValues(alpha: 0.3)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 50,
-                height: 50,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF7ED321), Color(0xFF9ACD32)],
-                  ),
-                ),
-                child: Center(
-                  child: Text(
-                    request['avatar'] ?? '🦊',
-                    style: const TextStyle(fontSize: 24),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 15),
-
-              Expanded(
+              // Friend Info - Flexible to prevent overflow
+              Flexible(
+                flex: 3,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      request['name'] ?? 'Unknown',
-                      style: const TextStyle(
-                        fontSize: 16,
+                      friend['name'] ?? 'Unknown',
+                      style: TextStyle(
+                        fontSize: isSmallScreen ? 14 : 16,
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFF2C3E50),
+                        color: const Color(0xFF2C3E50),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    SizedBox(height: isSmallScreen ? 2 : 4),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.emoji_events,
+                          size: isSmallScreen ? 12 : 14,
+                          color: Colors.grey[600],
+                        ),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            '${friend['totalScore'] ?? 0} pts${isMediumScreen ? '' : ' • ${friend['level'] ?? 'Beginner'}'}',
+                            style: TextStyle(
+                              fontSize: isSmallScreen ? 10 : 12,
+                              color: Colors.grey[600],
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (friend['isOnline'] != true && !isSmallScreen)
+                      Text(
+                        'Last seen recently',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey[500],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+
+              // Challenge Button - Flexible size
+              Flexible(
+                flex: 1,
+                child: Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isSmallScreen ? 8 : isMediumScreen ? 12 : 16,
+                    vertical: isSmallScreen ? 6 : 8,
+                  ),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFE8B4FF), Color(0xFFC490FF)],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: GestureDetector(
+                    onTap: () => _challengeFriend(friend),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        isSmallScreen ? 'Battle' : 'Challenge',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: isSmallScreen ? 10 : 12,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Wants to be friends',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
+                  ),
+                ),
+              ),
+
+              // More Options
+              SizedBox(
+                width: isSmallScreen ? 32 : 40,
+                child: PopupMenuButton<String>(
+                  icon: Icon(
+                    Icons.more_vert, 
+                    color: Colors.grey[400],
+                    size: isSmallScreen ? 18 : 24,
+                  ),
+                  onSelected: (value) {
+                    if (value == 'remove') {
+                      _confirmRemoveFriend(friend);
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'remove',
+                      child: Row(
+                        children: [
+                          Icon(Icons.person_remove, color: Colors.red),
+                          SizedBox(width: 8),
+                          Text('Remove Friend'),
+                        ],
                       ),
                     ),
                   ],
@@ -458,160 +445,273 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
               ),
             ],
           ),
+        );
+      },
+    );
+  }
 
-          if (request['message']?.isNotEmpty == true) ...[
-            const SizedBox(height: 12),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.grey[50],
-                borderRadius: BorderRadius.circular(8),
+  Widget _buildRequestCard(Map<String, dynamic> request) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final screenWidth = MediaQuery.of(context).size.width;
+        final isSmallScreen = screenWidth < 360;
+        
+        return Container(
+          margin: EdgeInsets.only(bottom: isSmallScreen ? 8 : 12),
+          padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(color: const Color(0xFF5B9EF3).withValues(alpha: 0.3)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
               ),
-              child: Text(
-                request['message'],
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[700],
-                ),
-              ),
-            ),
-          ],
-
-          const SizedBox(height: 16),
-          Row(
+            ],
+          ),
+          child: Column(
             children: [
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () => _acceptFriendRequest(request),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF7ED321),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+              Row(
+                children: [
+                  Container(
+                    width: isSmallScreen ? 40 : 50,
+                    height: isSmallScreen ? 40 : 50,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        colors: [Color(0xFF7ED321), Color(0xFF9ACD32)],
+                      ),
+                    ),
+                    child: Center(
+                      child: Text(
+                        request['avatar'] ?? '🦊',
+                        style: TextStyle(fontSize: isSmallScreen ? 20 : 24),
+                      ),
                     ),
                   ),
-                  child: const Text(
-                    'Accept',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
+                  SizedBox(width: isSmallScreen ? 10 : 15),
+
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          request['name'] ?? 'Unknown',
+                          style: TextStyle(
+                            fontSize: isSmallScreen ? 14 : 16,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF2C3E50),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        SizedBox(height: isSmallScreen ? 2 : 4),
+                        Text(
+                          'Wants to be friends',
+                          style: TextStyle(
+                            fontSize: isSmallScreen ? 10 : 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => _declineFriendRequest(request),
-                  style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: Colors.grey[300]!),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+
+              if (request['message']?.isNotEmpty == true) ...[
+                SizedBox(height: isSmallScreen ? 8 : 12),
+                Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.all(isSmallScreen ? 8 : 12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[50],
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    'Decline',
+                    request['message'],
                     style: TextStyle(
-                      color: Colors.grey[600],
-                      fontWeight: FontWeight.bold,
+                      fontSize: isSmallScreen ? 10 : 12,
+                      color: Colors.grey[700],
+                    ),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+
+              SizedBox(height: isSmallScreen ? 12 : 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => _acceptFriendRequest(request),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF7ED321),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: EdgeInsets.symmetric(
+                          vertical: isSmallScreen ? 8 : 12,
+                        ),
+                      ),
+                      child: Text(
+                        'Accept',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: isSmallScreen ? 12 : 14,
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: isSmallScreen ? 8 : 12),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => _declineFriendRequest(request),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: Colors.grey[300]!),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: EdgeInsets.symmetric(
+                          vertical: isSmallScreen ? 8 : 12,
+                        ),
+                      ),
+                      child: Text(
+                        'Decline',
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.bold,
+                          fontSize: isSmallScreen ? 12 : 14,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSearchResultCard(Map<String, dynamic> user) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final screenWidth = MediaQuery.of(context).size.width;
+        final isSmallScreen = screenWidth < 360;
+        final isMediumScreen = screenWidth < 500;
+        
+        return Container(
+          margin: EdgeInsets.only(bottom: isSmallScreen ? 8 : 12),
+          padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(15),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: isSmallScreen ? 40 : 50,
+                height: isSmallScreen ? 40 : 50,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [Color(0xFF7ED321), Color(0xFF9ACD32)],
+                  ),
+                ),
+                child: Center(
+                  child: Text(
+                    user['avatar'] ?? '🦊',
+                    style: TextStyle(fontSize: isSmallScreen ? 20 : 24),
+                  ),
+                ),
+              ),
+              SizedBox(width: isSmallScreen ? 10 : 15),
+
+              Flexible(
+                flex: 3,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      user['name'] ?? 'Unknown',
+                      style: TextStyle(
+                        fontSize: isSmallScreen ? 14 : 16,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF2C3E50),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    SizedBox(height: isSmallScreen ? 2 : 4),
+                    if (user['username']?.isNotEmpty == true && !isSmallScreen)
+                      Text(
+                        '@${user['username']}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[500],
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    Text(
+                      '${user['totalScore'] ?? 0} pts${isMediumScreen ? '' : ' • ${user['level'] ?? 'Beginner'}'}',
+                      style: TextStyle(
+                        fontSize: isSmallScreen ? 10 : 12,
+                        color: Colors.grey[600],
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+
+              SizedBox(width: isSmallScreen ? 8 : 15),
+              
+              Flexible(
+                flex: 1,
+                child: ElevatedButton(
+                  onPressed: () => _sendFriendRequest(user),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF5B9EF3),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isSmallScreen ? 12 : 16,
+                      vertical: isSmallScreen ? 6 : 8,
+                    ),
+                  ),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      'Add',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: isSmallScreen ? 10 : 12,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ),
               ),
             ],
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSearchResultCard(Map<String, dynamic> user) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 50,
-            height: 50,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                colors: [Color(0xFF7ED321), Color(0xFF9ACD32)],
-              ),
-            ),
-            child: Center(
-              child: Text(
-                user['avatar'] ?? '🦊',
-                style: const TextStyle(fontSize: 24),
-              ),
-            ),
-          ),
-          const SizedBox(width: 15),
-
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  user['name'] ?? 'Unknown',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF2C3E50),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                if (user['username']?.isNotEmpty == true)
-                  Text(
-                    '@${user['username']}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[500],
-                    ),
-                  ),
-                Text(
-                  '${user['totalScore'] ?? 0} pts • ${user['level'] ?? 'Beginner'}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          ElevatedButton(
-            onPressed: () => _sendFriendRequest(user),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF5B9EF3),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            ),
-            child: const Text(
-              'Add',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -689,16 +789,41 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
   }
 
   void _challengeFriend(Map<String, dynamic> friend) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 360;
+    
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        title: const Text('Challenge Friend'),
-        content: Text('Challenge ${friend['name']} to a math duel?'),
+        contentPadding: EdgeInsets.all(isSmallScreen ? 16 : 20),
+        title: Text(
+          'Challenge Friend',
+          style: TextStyle(
+            fontSize: isSmallScreen ? 16 : 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: screenWidth * 0.8,
+          ),
+          child: Text(
+            'Challenge ${friend['name']} to a math duel?',
+            style: TextStyle(
+              fontSize: isSmallScreen ? 14 : 16,
+            ),
+          ),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(
+              'Cancel',
+              style: TextStyle(
+                fontSize: isSmallScreen ? 12 : 14,
+              ),
+            ),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -715,8 +840,18 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF5B9EF3),
+              padding: EdgeInsets.symmetric(
+                horizontal: isSmallScreen ? 12 : 16,
+                vertical: isSmallScreen ? 8 : 12,
+              ),
             ),
-            child: const Text('Challenge', style: TextStyle(color: Colors.white)),
+            child: Text(
+              'Challenge',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: isSmallScreen ? 12 : 14,
+              ),
+            ),
           ),
         ],
       ),
@@ -724,16 +859,41 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
   }
 
   void _confirmRemoveFriend(Map<String, dynamic> friend) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 360;
+    
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        title: const Text('Remove Friend'),
-        content: Text('Remove ${friend['name']} from your friends list?'),
+        contentPadding: EdgeInsets.all(isSmallScreen ? 16 : 20),
+        title: Text(
+          'Remove Friend',
+          style: TextStyle(
+            fontSize: isSmallScreen ? 16 : 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: screenWidth * 0.8,
+          ),
+          child: Text(
+            'Remove ${friend['name']} from your friends list?',
+            style: TextStyle(
+              fontSize: isSmallScreen ? 14 : 16,
+            ),
+          ),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(
+              'Cancel',
+              style: TextStyle(
+                fontSize: isSmallScreen ? 12 : 14,
+              ),
+            ),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -750,8 +910,18 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
+              padding: EdgeInsets.symmetric(
+                horizontal: isSmallScreen ? 12 : 16,
+                vertical: isSmallScreen ? 8 : 12,
+              ),
             ),
-            child: const Text('Remove', style: TextStyle(color: Colors.white)),
+            child: Text(
+              'Remove',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: isSmallScreen ? 12 : 14,
+              ),
+            ),
           ),
         ],
       ),

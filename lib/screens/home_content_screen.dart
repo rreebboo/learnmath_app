@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'practice_screen.dart';
+import 'adaptive_quiz_screen.dart';
 import '../services/firestore_service.dart';
 import '../services/user_preferences_service.dart';
 
@@ -270,6 +271,21 @@ class _HomeContentState extends State<HomeContent> {
                       context,
                       MaterialPageRoute(
                         builder: (context) => const SoloPracticeScreen(),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+                _buildQuickActionCard(
+                  Icons.psychology,
+                  'Adaptive Quiz 🧠',
+                  'AI-powered questions that adapt to your skill',
+                  const Color(0xFF9C27B0),
+                  () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const AdaptiveQuizScreen(),
                       ),
                     );
                   },
