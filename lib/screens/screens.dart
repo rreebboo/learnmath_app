@@ -17,6 +17,7 @@ export 'simple_math_practice_screen.dart';
 export 'difficulty_selection_screen.dart';
 export 'quiz_screen.dart';
 export 'friends_screen.dart';
+export 'leaderboard_screen.dart';
 export 'progress_screen.dart';
 export 'profile_screen.dart';
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'practice_screen.dart';
 import 'adaptive_quiz_screen.dart';
+import 'leaderboard_screen.dart';
 import '../services/firestore_service.dart';
 import '../services/user_preferences_service.dart';
 
@@ -136,30 +137,57 @@ class _HomeContentState extends State<HomeContent> {
                         ),
                       ],
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFE4B5),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.local_fire_department,
-                            size: 16,
-                            color: Colors.orange,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${_userData?['streak'] ?? 7} Day Streak!',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.orange[700],
+                    Row(
+                      children: [
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const LeaderboardScreen(),
+                              ),
+                            );
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.shade100,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(
+                              Icons.emoji_events,
+                              color: Colors.amber.shade600,
+                              size: 20,
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(width: 12),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFE4B5),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.local_fire_department,
+                                size: 16,
+                                color: Colors.orange,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${_userData?['streak'] ?? 7} Day Streak!',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.orange[700],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -302,7 +330,7 @@ class _HomeContentState extends State<HomeContent> {
                   },
                 ),
                 const SizedBox(height: 12),
-                _buildQuickActionCard(
+_buildQuickActionCard(
                   Icons.trending_up,
                   'My Progress',
                   'See how you\'re doing',
@@ -310,6 +338,21 @@ class _HomeContentState extends State<HomeContent> {
                   () {
                     // Set bottom nav to Progress tab
                     widget.onTabChange(3);
+                  },
+                ),
+                const SizedBox(height: 12),
+                _buildQuickActionCard(
+                  Icons.emoji_events,
+                  'Leaderboards 🏆',
+                  'See how you rank against others!',
+                  const Color(0xFFFFA726),
+                  () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const LeaderboardScreen(),
+                      ),
+                    );
                   },
                 ),
                 
