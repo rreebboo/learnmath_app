@@ -63,8 +63,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
         },
         onError: (error) {
           if (mounted) {
+            // Show fallback data on error
+            _loadFallbackData();
             setState(() {
-              _error = error.toString();
+              _error = 'Unable to load latest data. Showing sample leaderboard.';
               _isLoading = false;
             });
           }
@@ -75,12 +77,79 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
       _loadUserRankInfo();
     } catch (e) {
       if (mounted) {
+        _loadFallbackData();
         setState(() {
-          _error = e.toString();
+          _error = 'Connection error. Showing sample leaderboard.';
           _isLoading = false;
         });
       }
     }
+  }
+
+  void _loadFallbackData() {
+    // Provide sample data when Firebase is not available
+    final currentUserId = _leaderboardService.firestoreService.currentUserId;
+    
+    _leaderboardData = [
+      LeaderboardUser(
+        id: 'sample1',
+        rank: 1,
+        name: 'Alex',
+        avatar: '👨‍🎓',
+        points: 1200,
+        streak: 15,
+        lessonsCompleted: 45,
+        isCurrentUser: false,
+      ),
+      LeaderboardUser(
+        id: 'sample2',
+        rank: 2,
+        name: 'Emma',
+        avatar: '👩‍🎓',
+        points: 980,
+        streak: 12,
+        lessonsCompleted: 38,
+        isCurrentUser: false,
+      ),
+      LeaderboardUser(
+        id: 'sample3',
+        rank: 3,
+        name: 'Sam',
+        avatar: '👨',
+        points: 850,
+        streak: 8,
+        lessonsCompleted: 32,
+        isCurrentUser: false,
+      ),
+      LeaderboardUser(
+        id: currentUserId ?? 'you',
+        rank: 4,
+        name: 'You!',
+        avatar: '⭐',
+        points: 720,
+        streak: 5,
+        lessonsCompleted: 28,
+        isCurrentUser: true,
+      ),
+      LeaderboardUser(
+        id: 'sample5',
+        rank: 5,
+        name: 'Maya',
+        avatar: '👧',
+        points: 650,
+        streak: 3,
+        lessonsCompleted: 25,
+        isCurrentUser: false,
+      ),
+    ];
+
+    _userRankInfo = UserRankInfo(
+      currentUserRank: 4,
+      totalUsers: 50,
+      currentUserScore: 720,
+      surroundingUsers: _leaderboardData.where((user) => 
+        user.rank >= 2 && user.rank <= 6).toList(),
+    );
   }
 
   Future<void> _loadUserRankInfo() async {
@@ -107,7 +176,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
         backgroundColor: Colors.white,
-        elevation: 0,
+        elevation: 1,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.black87),
           onPressed: () => Navigator.of(context).pop(),
@@ -141,81 +210,154 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           ),
         ],
       ),
-      body: RefreshIndicator(
+body: RefreshIndicator(
         onRefresh: () async {
           _loadLeaderboardData();
         },
-        child: SingleChildScrollView(
+        child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          child: Column(
-            children: [
-              _buildHeaderSection(screenWidth),
-              if (_isLoading)
-                const Padding(
+          slivers: [
+            SliverToBoxAdapter(
+              child: _buildHeaderSection(screenWidth),
+            ),
+            if (_isLoading)
+              const SliverToBoxAdapter(
+                child: Padding(
                   padding: EdgeInsets.all(50),
                   child: Center(
                     child: CircularProgressIndicator(),
                   ),
-                )
-              else if (_error != null)
-                Padding(
+                ),
+              )
+            else if (_error != null && _leaderboardData.isEmpty)
+              SliverToBoxAdapter(
+                child: Padding(
                   padding: const EdgeInsets.all(20),
                   child: Center(
                     child: Column(
                       children: [
                         const Icon(
-                          Icons.error_outline,
+                          Icons.cloud_off,
                           size: 48,
-                          color: Colors.red,
+                          color: Colors.orange,
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          'Failed to load leaderboard',
+                          'Connection Issue',
                           style: TextStyle(
                             fontSize: 16,
+                            fontWeight: FontWeight.w600,
                             color: Colors.grey.shade700,
                           ),
                         ),
                         const SizedBox(height: 8),
+                        Text(
+                          _error!,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
                         ElevatedButton(
                           onPressed: _loadLeaderboardData,
-                          child: const Text('Retry'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.orange,
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text('Try Again'),
                         ),
                       ],
                     ),
                   ),
-                )
-              else if (_leaderboardData.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.all(50),
-                  child: Center(
-                    child: Text(
-                      'No users found in leaderboard',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.grey,
+                ),
+              )
+            else if (_leaderboardData.isEmpty)
+              SliverToBoxAdapter(
+                child: Container(
+                  margin: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.all(30),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.withValues(alpha: 0.1),
+                        spreadRadius: 1,
+                        blurRadius: 10,
+                        offset: const Offset(0, 2),
                       ),
-                    ),
+                    ],
                   ),
-                )
-              else ...[
-                _buildPodiumSection(screenWidth, screenHeight),
-                _buildLeaderboardList(),
-                if (_userRankInfo != null) _buildUserRankSection(),
-                _buildMotivationalCard(),
-              ],
-              const SizedBox(height: 20),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.emoji_events_outlined,
+                        size: 64,
+                        color: Colors.grey.shade400,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Be the first champion!',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Complete some math exercises to appear on the leaderboard',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Start Practicing'),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else ...[
+              if (_error != null)
+                SliverToBoxAdapter(child: _buildConnectionBanner()),
+              SliverToBoxAdapter(
+                child: _buildPodiumSection(screenWidth, screenHeight),
+              ),
+              SliverToBoxAdapter(
+                child: _buildLeaderboardList(),
+              ),
+              if (_userRankInfo != null)
+                SliverToBoxAdapter(child: _buildUserRankSection()),
+              SliverToBoxAdapter(
+                child: _buildMotivationalCard(),
+              ),
             ],
-          ),
+            SliverToBoxAdapter(
+              child: SizedBox(
+                height: MediaQuery.of(context).padding.bottom + 80,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildHeaderSection(double screenWidth) {
+Widget _buildHeaderSection(double screenWidth) {
     return Container(
       color: Colors.white,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
       child: Column(
         children: [
           const Text(
@@ -225,9 +367,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
               fontSize: 16,
             ),
           ),
-          const SizedBox(height: 20),
-          _buildToggleButtons(),
           const SizedBox(height: 16),
+          _buildToggleButtons(),
+          const SizedBox(height: 12),
           _buildGradeButtons(),
         ],
       ),
@@ -328,15 +470,29 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     );
   }
 
-  Widget _buildPodiumSection(double screenWidth, double screenHeight) {
+Widget _buildPodiumSection(double screenWidth, double screenHeight) {
     final top3 = _leaderboardData.take(3).toList();
-    if (top3.length < 3) {
+    if (top3.isEmpty) {
       return const SizedBox.shrink();
     }
     
-    return Container(
-      margin: const EdgeInsets.all(20),
-      padding: const EdgeInsets.all(20),
+    // Fill empty spots with placeholder users if needed
+    while (top3.length < 3) {
+      top3.add(LeaderboardUser(
+        id: 'placeholder_${top3.length}',
+        rank: top3.length + 1,
+        name: 'Empty',
+        avatar: '🎯',
+        points: 0,
+        streak: 0,
+        lessonsCompleted: 0,
+        isCurrentUser: false,
+      ));
+    }
+    
+return Container(
+      margin: const EdgeInsets.fromLTRB(20, 10, 20, 10),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
@@ -359,17 +515,15 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
               color: Colors.black87,
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              if (top3.length > 1)
-                _buildPodiumPosition(top3[1], 2, Colors.grey.shade300, false),
-              if (top3.length > 1) const SizedBox(width: 12),
+              _buildPodiumPosition(top3[1], 2, Colors.grey.shade300, false),
+              const SizedBox(width: 8),
               _buildPodiumPosition(top3[0], 1, Colors.amber.shade200, true),
-              if (top3.length > 2) const SizedBox(width: 12),
-              if (top3.length > 2)
-                _buildPodiumPosition(top3[2], 3, Colors.orange.shade200, false),
+              const SizedBox(width: 8),
+              _buildPodiumPosition(top3[2], 3, Colors.orange.shade200, false),
             ],
           ),
         ],
@@ -377,54 +531,79 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     );
   }
 
-  Widget _buildPodiumPosition(LeaderboardUser user, int position, Color bgColor, bool isWinner) {
+Widget _buildPodiumPosition(LeaderboardUser user, int position, Color bgColor, bool isWinner) {
     String medal = position == 1 ? '👑' : (position == 2 ? '🥈' : '🥉');
-    double height = isWinner ? 120 : 100;
+    double height = isWinner ? 100 : 85;
+    
+    // Handle placeholder users
+    bool isPlaceholder = user.name == 'Empty';
     
     return Expanded(
       child: Container(
         height: height,
         decoration: BoxDecoration(
-          color: bgColor,
+          color: isPlaceholder ? Colors.grey.shade100 : bgColor,
           borderRadius: BorderRadius.circular(15),
           border: user.isCurrentUser 
               ? Border.all(color: Colors.green, width: 2)
-              : null,
+              : isPlaceholder 
+                ? Border.all(color: Colors.grey.shade300, width: 1)
+                : null,
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(medal, style: const TextStyle(fontSize: 24)),
+            Text(
+              isPlaceholder ? '?' : medal, 
+              style: TextStyle(
+                fontSize: 24,
+                color: isPlaceholder ? Colors.grey.shade400 : null,
+              ),
+            ),
             const SizedBox(height: 8),
             Container(
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: user.isCurrentUser ? Colors.green.shade100 : Colors.white,
+                color: isPlaceholder 
+                    ? Colors.grey.shade200
+                    : user.isCurrentUser 
+                      ? Colors.green.shade100 
+                      : Colors.white,
                 shape: BoxShape.circle,
                 border: user.isCurrentUser 
                     ? Border.all(color: Colors.green.shade300)
                     : null,
               ),
               child: Center(
-                child: user.isCurrentUser
-                    ? Icon(Icons.star, color: Colors.green.shade600, size: 20)
-                    : Text(user.avatar, style: const TextStyle(fontSize: 20)),
+                child: isPlaceholder
+                    ? Icon(Icons.person_outline, color: Colors.grey.shade400, size: 20)
+                    : user.isCurrentUser
+                      ? Icon(Icons.star, color: Colors.green.shade600, size: 20)
+                      : Text(user.avatar, style: const TextStyle(fontSize: 20)),
               ),
             ),
             const SizedBox(height: 8),
             Text(
-              user.isCurrentUser ? 'You!' : user.name,
+              isPlaceholder 
+                  ? 'Available'
+                  : user.isCurrentUser 
+                    ? 'You!' 
+                    : user.name,
               style: TextStyle(
                 fontWeight: FontWeight.w600,
                 fontSize: 14,
-                color: user.isCurrentUser ? Colors.green.shade700 : Colors.black87,
+                color: isPlaceholder 
+                    ? Colors.grey.shade500
+                    : user.isCurrentUser 
+                      ? Colors.green.shade700 
+                      : Colors.black87,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
             Text(
-              '${user.points} pts',
+              isPlaceholder ? '0 pts' : '${user.points} pts',
               style: TextStyle(
                 color: Colors.grey.shade600,
                 fontSize: 12,
@@ -436,7 +615,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     );
   }
 
-  Widget _buildLeaderboardList() {
+Widget _buildLeaderboardList() {
     final remainingEntries = _leaderboardData.skip(3).toList();
     
     if (remainingEntries.isEmpty) {
@@ -444,7 +623,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     }
     
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20),
+      margin: const EdgeInsets.fromLTRB(20, 10, 20, 10),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
@@ -485,9 +664,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     );
   }
 
-  Widget _buildLeaderboardRow(LeaderboardUser user) {
+Widget _buildLeaderboardRow(LeaderboardUser user) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
           Container(
@@ -613,11 +792,11 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     );
   }
 
-  Widget _buildUserRankSection() {
+Widget _buildUserRankSection() {
     if (_userRankInfo == null) return const SizedBox.shrink();
     
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      margin: const EdgeInsets.fromLTRB(20, 10, 20, 10),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.blue.shade50,
@@ -654,10 +833,49 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     );
   }
 
-  Widget _buildMotivationalCard() {
+Widget _buildConnectionBanner() {
     return Container(
-      margin: const EdgeInsets.all(20),
-      padding: const EdgeInsets.all(20),
+      margin: const EdgeInsets.fromLTRB(20, 5, 20, 5),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade100,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.orange.shade300),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.info_outline,
+            color: Colors.orange.shade600,
+            size: 20,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              _error!,
+              style: TextStyle(
+                color: Colors.orange.shade800,
+                fontSize: 12,
+              ),
+            ),
+          ),
+          GestureDetector(
+            onTap: _loadLeaderboardData,
+            child: Icon(
+              Icons.refresh,
+              color: Colors.orange.shade600,
+              size: 20,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+Widget _buildMotivationalCard() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 10, 20, 10),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.green.shade400,
         borderRadius: BorderRadius.circular(20),

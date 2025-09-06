@@ -5,55 +5,65 @@ class LeaderboardService {
   final FirestoreService _firestoreService = FirestoreService();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  // Getter to access the firestore service
+  FirestoreService get firestoreService => _firestoreService;
+
   // Get leaderboard with different time periods
   Stream<List<LeaderboardUser>> getLeaderboardStream({
     String period = 'all-time',
     String grade = 'all',
     int limit = 50,
   }) {
-    Query query = _firestore.collection('users');
+    try {
+      Query query = _firestore.collection('users');
 
-    // Apply grade filter if specified
-    if (grade != 'all' && grade.isNotEmpty) {
-      // For now, we'll assume grade is stored in user preferences
-      // You might want to add a 'grade' field to user documents
-      query = query.where('preferences.grade', isEqualTo: grade);
-    }
-
-    // Apply time-based filtering for different periods
-    if (period == 'weekly') {
-      final weekAgo = DateTime.now().subtract(const Duration(days: 7));
-      query = query.where('lastLoginDate', isGreaterThanOrEqualTo: Timestamp.fromDate(weekAgo));
-    } else if (period == 'monthly') {
-      final monthAgo = DateTime.now().subtract(const Duration(days: 30));
-      query = query.where('lastLoginDate', isGreaterThanOrEqualTo: Timestamp.fromDate(monthAgo));
-    }
-
-    // Order by total score descending
-    query = query.orderBy('totalScore', descending: true).limit(limit);
-
-    return query.snapshots().map((snapshot) {
-      List<LeaderboardUser> users = [];
-      int rank = 1;
-      
-      for (var doc in snapshot.docs) {
-        final data = doc.data() as Map<String, dynamic>;
-        final user = LeaderboardUser(
-          id: doc.id,
-          rank: rank++,
-          name: data['name'] ?? 'Unknown',
-          avatar: data['avatar'] ?? '🦊',
-          points: data['totalScore'] ?? 0,
-          streak: data['currentStreak'] ?? 0,
-          lessonsCompleted: data['lessonsCompleted'] ?? 0,
-          isCurrentUser: doc.id == _firestoreService.currentUserId,
-          lastActive: (data['lastLoginDate'] as Timestamp?)?.toDate(),
-        );
-        users.add(user);
+      // For all-time, just order by total score
+      if (period == 'all-time') {
+        query = query.orderBy('totalScore', descending: true).limit(limit);
+      } else {
+        // For weekly and monthly, we'll filter by lastLoginDate to get active users
+        DateTime cutoffDate;
+        if (period == 'weekly') {
+          cutoffDate = DateTime.now().subtract(const Duration(days: 7));
+        } else {
+          cutoffDate = DateTime.now().subtract(const Duration(days: 30));
+        }
+        
+        query = query
+            .where('lastLoginDate', isGreaterThanOrEqualTo: Timestamp.fromDate(cutoffDate))
+            .orderBy('lastLoginDate', descending: true)
+            .orderBy('totalScore', descending: true)
+            .limit(limit);
       }
-      
-      return users;
-    });
+
+      return query.snapshots().map((snapshot) {
+        List<LeaderboardUser> users = [];
+        int rank = 1;
+        
+        for (var doc in snapshot.docs) {
+          final data = doc.data() as Map<String, dynamic>?;
+          if (data != null) {
+            final user = LeaderboardUser(
+              id: doc.id,
+              rank: rank++,
+              name: data['name'] ?? 'User${rank - 1}',
+              avatar: data['avatar'] ?? '🦊',
+              points: (data['totalScore'] as num?)?.toInt() ?? 0,
+              streak: (data['currentStreak'] as num?)?.toInt() ?? 0,
+              lessonsCompleted: (data['lessonsCompleted'] as num?)?.toInt() ?? 0,
+              isCurrentUser: doc.id == _firestoreService.currentUserId,
+              lastActive: (data['lastLoginDate'] as Timestamp?)?.toDate(),
+            );
+            users.add(user);
+          }
+        }
+        
+        return users;
+      });
+    } catch (e) {
+      // Return empty stream on error
+      return Stream.value(<LeaderboardUser>[]);
+    }
   }
 
   // Get current user's rank and surrounding users
@@ -74,51 +84,28 @@ class LeaderboardService {
 
       // Get current user data
       final currentUserData = await _firestoreService.getCurrentUserData();
-      final currentUserScore = currentUserData?['totalScore'] ?? 0;
-
-      // Count users with higher scores to determine rank
-      Query higherScoreQuery = _firestore.collection('users')
-          .where('totalScore', isGreaterThan: currentUserScore);
-
-      // Apply the same filters as the main leaderboard
-      if (grade != 'all' && grade.isNotEmpty) {
-        higherScoreQuery = higherScoreQuery.where('preferences.grade', isEqualTo: grade);
-      }
-
-      if (period == 'weekly') {
-        final weekAgo = DateTime.now().subtract(const Duration(days: 7));
-        higherScoreQuery = higherScoreQuery.where('lastLoginDate', 
-            isGreaterThanOrEqualTo: Timestamp.fromDate(weekAgo));
-      } else if (period == 'monthly') {
-        final monthAgo = DateTime.now().subtract(const Duration(days: 30));
-        higherScoreQuery = higherScoreQuery.where('lastLoginDate', 
-            isGreaterThanOrEqualTo: Timestamp.fromDate(monthAgo));
-      }
-
-      final higherScoreSnapshot = await higherScoreQuery.get();
-      final currentUserRank = higherScoreSnapshot.docs.length + 1;
+      final currentUserScore = (currentUserData?['totalScore'] as num?)?.toInt() ?? 0;
 
       // Get total user count
-      Query totalUsersQuery = _firestore.collection('users');
-      if (grade != 'all' && grade.isNotEmpty) {
-        totalUsersQuery = totalUsersQuery.where('preferences.grade', isEqualTo: grade);
-      }
-      
-      final totalUsersSnapshot = await totalUsersQuery.get();
+      final totalUsersSnapshot = await _firestore.collection('users').get();
       final totalUsers = totalUsersSnapshot.docs.length;
 
-      // Get surrounding users (few above and below current user)
-      final leaderboardStream = getLeaderboardStream(
-        period: period,
-        grade: grade,
-        limit: 50,
-      );
+      // Get the leaderboard to find current user's rank
+      Stream<List<LeaderboardUser>> leaderboardStream;
+      if (period == 'weekly') {
+        leaderboardStream = getWeeklyLeaderboardStream(limit: 100);
+      } else if (period == 'monthly') {
+        leaderboardStream = getMonthlyLeaderboardStream(limit: 100);
+      } else {
+        leaderboardStream = getLeaderboardStream(period: period, limit: 100);
+      }
       
       final leaderboardUsers = await leaderboardStream.first;
       final currentUserIndex = leaderboardUsers.indexWhere((user) => user.isCurrentUser);
+      final currentUserRank = currentUserIndex >= 0 ? currentUserIndex + 1 : totalUsers;
       
       List<LeaderboardUser> surroundingUsers = [];
-      if (currentUserIndex != -1) {
+      if (currentUserIndex >= 0) {
         final start = (currentUserIndex - 2).clamp(0, leaderboardUsers.length);
         final end = (currentUserIndex + 3).clamp(0, leaderboardUsers.length);
         surroundingUsers = leaderboardUsers.sublist(start, end);
@@ -133,7 +120,7 @@ class LeaderboardService {
     } catch (e) {
       return UserRankInfo(
         currentUserRank: 0,
-        totalUsers: 0,
+        totalUsers: 1,
         currentUserScore: 0,
         surroundingUsers: [],
       );
@@ -145,62 +132,73 @@ class LeaderboardService {
     String grade = 'all',
     int limit = 50,
   }) {
-    final weekAgo = Timestamp.fromDate(DateTime.now().subtract(const Duration(days: 7)));
+    try {
+      final weekAgo = Timestamp.fromDate(DateTime.now().subtract(const Duration(days: 7)));
 
-    return _firestore.collectionGroup('practice_sessions')
-        .where('completedAt', isGreaterThanOrEqualTo: weekAgo)
-        .snapshots()
-        .asyncMap((snapshot) async {
-          // Group by user ID and calculate weekly scores
-          Map<String, int> weeklyScores = {};
-          Map<String, Map<String, dynamic>> userDataCache = {};
+      return _firestore.collectionGroup('practice_sessions')
+          .where('completedAt', isGreaterThanOrEqualTo: weekAgo)
+          .snapshots()
+          .asyncMap((snapshot) async {
+            // Group by user ID and calculate weekly scores
+            Map<String, int> weeklyScores = {};
+            Map<String, Map<String, dynamic>> userDataCache = {};
 
-          for (var doc in snapshot.docs) {
-            final data = doc.data();
-            final userId = doc.reference.parent.parent?.id;
-            if (userId != null) {
-              final score = data['score'] as int? ?? 0;
-              weeklyScores[userId] = (weeklyScores[userId] ?? 0) + score;
-            }
-          }
-
-          // Get user data for each user in the weekly scores
-          List<LeaderboardUser> users = [];
-          int rank = 1;
-
-          // Sort users by weekly score
-          final sortedEntries = weeklyScores.entries.toList()
-            ..sort((a, b) => b.value.compareTo(a.value));
-
-          for (var entry in sortedEntries.take(limit)) {
-            final userId = entry.key;
-            final weeklyScore = entry.value;
-
-            // Get user data (cache to avoid repeated requests)
-            if (!userDataCache.containsKey(userId)) {
-              try {
-                userDataCache[userId] = await _firestoreService.getUserData(userId) ?? {};
-              } catch (e) {
-                userDataCache[userId] = {};
+            for (var doc in snapshot.docs) {
+              final data = doc.data();
+              final userId = doc.reference.parent.parent?.id;
+              if (userId != null && data['score'] != null) {
+                final score = (data['score'] as num).toInt();
+                weeklyScores[userId] = (weeklyScores[userId] ?? 0) + score;
               }
             }
 
-            final userData = userDataCache[userId]!;
-            users.add(LeaderboardUser(
-              id: userId,
-              rank: rank++,
-              name: userData['name'] ?? 'Unknown',
-              avatar: userData['avatar'] ?? '🦊',
-              points: weeklyScore, // Use weekly score instead of total
-              streak: userData['currentStreak'] ?? 0,
-              lessonsCompleted: userData['lessonsCompleted'] ?? 0,
-              isCurrentUser: userId == _firestoreService.currentUserId,
-              lastActive: (userData['lastLoginDate'] as Timestamp?)?.toDate(),
-            ));
-          }
+            // If no weekly data, fall back to regular leaderboard
+            if (weeklyScores.isEmpty) {
+              return await getLeaderboardStream(period: 'all-time', limit: limit).first;
+            }
 
-          return users;
-        });
+            // Get user data for each user in the weekly scores
+            List<LeaderboardUser> users = [];
+            int rank = 1;
+
+            // Sort users by weekly score
+            final sortedEntries = weeklyScores.entries.toList()
+              ..sort((a, b) => b.value.compareTo(a.value));
+
+            for (var entry in sortedEntries.take(limit)) {
+              final userId = entry.key;
+              final weeklyScore = entry.value;
+
+              // Get user data (cache to avoid repeated requests)
+              if (!userDataCache.containsKey(userId)) {
+                try {
+                  final userData = await _firestoreService.getUserData(userId);
+                  userDataCache[userId] = userData ?? {};
+                } catch (e) {
+                  userDataCache[userId] = {};
+                }
+              }
+
+              final userData = userDataCache[userId]!;
+              users.add(LeaderboardUser(
+                id: userId,
+                rank: rank++,
+                name: userData['name'] ?? 'User${rank - 1}',
+                avatar: userData['avatar'] ?? '🦊',
+                points: weeklyScore,
+                streak: (userData['currentStreak'] as num?)?.toInt() ?? 0,
+                lessonsCompleted: (userData['lessonsCompleted'] as num?)?.toInt() ?? 0,
+                isCurrentUser: userId == _firestoreService.currentUserId,
+                lastActive: (userData['lastLoginDate'] as Timestamp?)?.toDate(),
+              ));
+            }
+
+            return users;
+          });
+    } catch (e) {
+      // Fallback to all-time leaderboard on error
+      return getLeaderboardStream(period: 'all-time', limit: limit);
+    }
   }
 
   // Get monthly leaderboard based on practice sessions
@@ -208,58 +206,69 @@ class LeaderboardService {
     String grade = 'all',
     int limit = 50,
   }) {
-    final monthAgo = Timestamp.fromDate(DateTime.now().subtract(const Duration(days: 30)));
+    try {
+      final monthAgo = Timestamp.fromDate(DateTime.now().subtract(const Duration(days: 30)));
 
-    return _firestore.collectionGroup('practice_sessions')
-        .where('completedAt', isGreaterThanOrEqualTo: monthAgo)
-        .snapshots()
-        .asyncMap((snapshot) async {
-          Map<String, int> monthlyScores = {};
-          Map<String, Map<String, dynamic>> userDataCache = {};
+      return _firestore.collectionGroup('practice_sessions')
+          .where('completedAt', isGreaterThanOrEqualTo: monthAgo)
+          .snapshots()
+          .asyncMap((snapshot) async {
+            Map<String, int> monthlyScores = {};
+            Map<String, Map<String, dynamic>> userDataCache = {};
 
-          for (var doc in snapshot.docs) {
-            final data = doc.data();
-            final userId = doc.reference.parent.parent?.id;
-            if (userId != null) {
-              final score = data['score'] as int? ?? 0;
-              monthlyScores[userId] = (monthlyScores[userId] ?? 0) + score;
-            }
-          }
-
-          List<LeaderboardUser> users = [];
-          int rank = 1;
-
-          final sortedEntries = monthlyScores.entries.toList()
-            ..sort((a, b) => b.value.compareTo(a.value));
-
-          for (var entry in sortedEntries.take(limit)) {
-            final userId = entry.key;
-            final monthlyScore = entry.value;
-
-            if (!userDataCache.containsKey(userId)) {
-              try {
-                userDataCache[userId] = await _firestoreService.getUserData(userId) ?? {};
-              } catch (e) {
-                userDataCache[userId] = {};
+            for (var doc in snapshot.docs) {
+              final data = doc.data();
+              final userId = doc.reference.parent.parent?.id;
+              if (userId != null && data['score'] != null) {
+                final score = (data['score'] as num).toInt();
+                monthlyScores[userId] = (monthlyScores[userId] ?? 0) + score;
               }
             }
 
-            final userData = userDataCache[userId]!;
-            users.add(LeaderboardUser(
-              id: userId,
-              rank: rank++,
-              name: userData['name'] ?? 'Unknown',
-              avatar: userData['avatar'] ?? '🦊',
-              points: monthlyScore,
-              streak: userData['currentStreak'] ?? 0,
-              lessonsCompleted: userData['lessonsCompleted'] ?? 0,
-              isCurrentUser: userId == _firestoreService.currentUserId,
-              lastActive: (userData['lastLoginDate'] as Timestamp?)?.toDate(),
-            ));
-          }
+            // If no monthly data, fall back to regular leaderboard
+            if (monthlyScores.isEmpty) {
+              return await getLeaderboardStream(period: 'all-time', limit: limit).first;
+            }
 
-          return users;
-        });
+            List<LeaderboardUser> users = [];
+            int rank = 1;
+
+            final sortedEntries = monthlyScores.entries.toList()
+              ..sort((a, b) => b.value.compareTo(a.value));
+
+            for (var entry in sortedEntries.take(limit)) {
+              final userId = entry.key;
+              final monthlyScore = entry.value;
+
+              if (!userDataCache.containsKey(userId)) {
+                try {
+                  final userData = await _firestoreService.getUserData(userId);
+                  userDataCache[userId] = userData ?? {};
+                } catch (e) {
+                  userDataCache[userId] = {};
+                }
+              }
+
+              final userData = userDataCache[userId]!;
+              users.add(LeaderboardUser(
+                id: userId,
+                rank: rank++,
+                name: userData['name'] ?? 'User${rank - 1}',
+                avatar: userData['avatar'] ?? '🦊',
+                points: monthlyScore,
+                streak: (userData['currentStreak'] as num?)?.toInt() ?? 0,
+                lessonsCompleted: (userData['lessonsCompleted'] as num?)?.toInt() ?? 0,
+                isCurrentUser: userId == _firestoreService.currentUserId,
+                lastActive: (userData['lastLoginDate'] as Timestamp?)?.toDate(),
+              ));
+            }
+
+            return users;
+          });
+    } catch (e) {
+      // Fallback to all-time leaderboard on error
+      return getLeaderboardStream(period: 'all-time', limit: limit);
+    }
   }
 }
 
