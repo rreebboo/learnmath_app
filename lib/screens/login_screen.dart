@@ -17,6 +17,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
   bool _isGuestMode = true;
+  bool _isPasswordVisible = false;
   String _selectedAvatar = '🦊';
   final List<String> _avatars = ['🦊', '🐶', '🐷', '🐱', '🐰', '🐼'];
   final AuthService _authService = AuthService();
@@ -485,11 +486,22 @@ class _LoginScreenState extends State<LoginScreen> {
                             SizedBox(height: 15),
                             TextFormField(
                               controller: _passwordController,
-                              obscureText: true,
+                              obscureText: !_isPasswordVisible,
                               decoration: InputDecoration(
                                 labelText: 'Password',
                                 hintText: 'Enter your password',
                                 prefixIcon: Icon(Icons.lock, color: Colors.grey[600]),
+                                suffixIcon: IconButton(
+                                  icon: Icon(
+                                    _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
+                                    color: Colors.grey[600],
+                                  ),
+                                  onPressed: () {
+                                    setState(() {
+                                      _isPasswordVisible = !_isPasswordVisible;
+                                    });
+                                  },
+                                ),
                                 filled: true,
                                 fillColor: Color(0xFFF7F9FC),
                                 border: OutlineInputBorder(

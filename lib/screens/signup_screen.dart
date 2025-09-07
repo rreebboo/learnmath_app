@@ -13,11 +13,28 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _confirmPasswordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   String _selectedAvatar = '🦊';
   final List<String> _avatars = ['🦊', '🐶', '🐷', '🐱', '🐰', '🐼'];
   bool _isLoading = false;
+  bool _isPasswordVisible = false;
+  bool _isConfirmPasswordVisible = false;
   final AuthService _authService = AuthService();
+
+  @override
+  void initState() {
+    super.initState();
+    // Add listeners to update password match indicator in real-time
+    _passwordController.addListener(_updatePasswordMatch);
+    _confirmPasswordController.addListener(_updatePasswordMatch);
+  }
+
+  void _updatePasswordMatch() {
+    setState(() {
+      // This will trigger a rebuild to update the password match indicator
+    });
+  }
 
   Future<void> _signUp() async {
     if (!_formKey.currentState!.validate()) return;
@@ -377,11 +394,22 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           // Password input
                           TextFormField(
                             controller: _passwordController,
-                            obscureText: true,
+                            obscureText: !_isPasswordVisible,
                             decoration: InputDecoration(
                               labelText: 'Password',
                               hintText: 'Create a password',
                               prefixIcon: Icon(Icons.lock, color: Colors.grey[600]),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
+                                  color: Colors.grey[600],
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _isPasswordVisible = !_isPasswordVisible;
+                                  });
+                                },
+                              ),
                               filled: true,
                               fillColor: Color(0xFFF7F9FC),
                               border: OutlineInputBorder(
@@ -407,6 +435,100 @@ class _SignUpScreenState extends State<SignUpScreen> {
                               return null;
                             },
                           ),
+                          
+                          SizedBox(height: 15),
+                          // Confirm Password input
+                          TextFormField(
+                            controller: _confirmPasswordController,
+                            obscureText: !_isConfirmPasswordVisible,
+                            decoration: InputDecoration(
+                              labelText: 'Confirm Password',
+                              hintText: 'Confirm your password',
+                              prefixIcon: Icon(Icons.lock_outline, color: Colors.grey[600]),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _isConfirmPasswordVisible ? Icons.visibility : Icons.visibility_off,
+                                  color: Colors.grey[600],
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _isConfirmPasswordVisible = !_isConfirmPasswordVisible;
+                                  });
+                                },
+                              ),
+                              filled: true,
+                              fillColor: Color(0xFFF7F9FC),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: Color(0xFFE1E8ED)),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: Color(0xFFE1E8ED)),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: Color(0xFF7ED321), width: 2),
+                              ),
+                              errorBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: Colors.red, width: 2),
+                              ),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Please confirm your password';
+                              }
+                              if (value != _passwordController.text) {
+                                return 'Passwords do not match';
+                              }
+                              return null;
+                            },
+                          ),
+                          
+                          // Password match indicator
+                          if (_passwordController.text.isNotEmpty && _confirmPasswordController.text.isNotEmpty)
+                            Container(
+                              margin: EdgeInsets.only(top: 8),
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: _passwordController.text == _confirmPasswordController.text 
+                                    ? Color(0xFFE8F5E8) 
+                                    : Color(0xFFFFEBEE),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: _passwordController.text == _confirmPasswordController.text 
+                                      ? Color(0xFF7ED321).withOpacity(0.3) 
+                                      : Colors.red.withOpacity(0.3),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    _passwordController.text == _confirmPasswordController.text 
+                                        ? Icons.check_circle_outline 
+                                        : Icons.error_outline,
+                                    color: _passwordController.text == _confirmPasswordController.text 
+                                        ? Color(0xFF7ED321) 
+                                        : Colors.red,
+                                    size: 16,
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    _passwordController.text == _confirmPasswordController.text 
+                                        ? 'Passwords match!' 
+                                        : 'Passwords do not match',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: _passwordController.text == _confirmPasswordController.text 
+                                          ? Color(0xFF2C3E50) 
+                                          : Colors.red,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           
                           SizedBox(height: 30),
                           // Sign up button
@@ -495,6 +617,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 }

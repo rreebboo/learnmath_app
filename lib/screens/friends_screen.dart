@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/friends_service.dart';
 import '../services/firestore_service.dart';
@@ -17,12 +18,115 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
   late TabController _tabController;
   List<Map<String, dynamic>> _searchResults = [];
   bool _isSearching = false;
+  final Map<String, bool> _sendingRequests = {};
+  Map<String, String> _relationshipStatus = {}; // 'friends', 'pending', 'none'
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     _loadUserData();
+    _testConnection();
+    _startPeriodicStatusRefresh();
+  }
+
+  // Automatically refresh status of visible search results periodically
+  void _startPeriodicStatusRefresh() {
+    Timer.periodic(const Duration(seconds: 5), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      
+      // Only refresh if we have search results visible
+      if (_searchResults.isNotEmpty && !_isSearching) {
+        _refreshVisibleStatuses();
+      }
+    });
+  }
+
+  Future<void> _refreshVisibleStatuses() async {
+    try {
+      print('FriendsScreen: Auto-refreshing visible statuses...');
+      
+      // Check status for all visible search results
+      for (var user in _searchResults) {
+        final userId = user['id'];
+        final currentStatus = _relationshipStatus[userId] ?? 'none';
+        
+        // Only check if current status might be stale (pending or none)
+        if (currentStatus == 'pending' || currentStatus == 'none') {
+          final newStatus = await _friendsService.getCleanRelationshipStatus(userId);
+          
+          if (mounted && newStatus != currentStatus) {
+            setState(() {
+              _relationshipStatus[userId] = newStatus;
+            });
+            print('FriendsScreen: Auto-updated $userId: $currentStatus → $newStatus');
+          }
+        }
+      }
+    } catch (e) {
+      print('FriendsScreen: Error in auto status refresh: $e');
+    }
+  }
+
+  Future<void> _testConnection() async {
+    print('FriendsScreen: Running comprehensive friends functionality test...');
+    
+    // Run comprehensive test
+    final allTestsPassed = await _friendsService.testFriendsFunctionality();
+    
+    // Get friends stats
+    final stats = await _friendsService.getFriendsStats();
+    
+    // Run debug cleanup to remove any stale requests
+    print('FriendsScreen: Running debug cleanup...');
+    await _friendsService.debugCleanupAllRequests();
+    
+    // Provide user feedback based on test results
+    if (!allTestsPassed) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('❌ Friends system not working properly. Check your connection and permissions.'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 5),
+          ),
+        );
+      }
+    } else {
+      print('FriendsScreen: ✅ All friends functionality tests passed!');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ Friends system ready! Friends: ${stats['friendsCount'] ?? 0}, Requests: ${stats['incomingRequestsCount'] ?? 0}'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
+  // Method to refresh relationship status for a specific user
+  Future<void> _refreshRelationshipStatus(String userId) async {
+    try {
+      print('FriendsScreen: Refreshing relationship status for $userId');
+      
+      // Use smart status check that automatically cleans up stale data
+      final newStatus = await _friendsService.getCleanRelationshipStatus(userId);
+      
+      if (mounted) {
+        setState(() {
+          _relationshipStatus[userId] = newStatus;
+        });
+      }
+      
+      print('FriendsScreen: Refreshed relationship status for $userId: $newStatus');
+    } catch (e) {
+      print('FriendsScreen: Error refreshing relationship status: $e');
+    }
   }
 
   @override
@@ -55,9 +159,26 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
 
     try {
       final results = await _friendsService.searchUsers(query);
+      
+      // FORCE CLEAR CACHE - Always check database for fresh status
+      Map<String, String> statusMap = {};
+      for (var user in results) {
+        final userId = user['id'];
+        
+        print('🔍 SMART CHECKING status for user: ${user['name']} ($userId)');
+        
+        // Use smart status check that automatically cleans up stale requests
+        final status = await _friendsService.getCleanRelationshipStatus(userId);
+        statusMap[userId] = status;
+        
+        print('   - FINAL STATUS: $status ${status == 'friends' ? '✅' : status == 'pending' ? '⏳' : '🆕'}');
+      }
+      
       if (mounted) {
         setState(() {
           _searchResults = results;
+          // COMPLETELY REPLACE the cache - don't merge with old data
+          _relationshipStatus = statusMap;
           _isSearching = false;
         });
       }
@@ -94,6 +215,44 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
           ),
         ),
         actions: [
+          // FORCE REFRESH BUTTON for debugging
+          IconButton(
+            icon: Icon(
+              Icons.refresh,
+              color: Colors.orange,
+              size: isSmallScreen ? 20 : 24,
+            ),
+            onPressed: () async {
+              print('🔄 MANUAL FORCE REFRESH ALL DATA');
+              
+              // Clear ALL cached status
+              setState(() {
+                _relationshipStatus.clear();
+              });
+              
+              // Aggressive cleanup - removes ALL friend requests to reset stuck states
+              await _friendsService.aggressiveCleanupAllRequests();
+              
+              // Wait for Firestore changes to propagate
+              await Future.delayed(const Duration(milliseconds: 1000));
+              
+              // If there are search results, refresh them
+              if (_searchResults.isNotEmpty) {
+                final query = _searchController.text;
+                if (query.isNotEmpty) {
+                  await _searchUsers(query);
+                }
+              }
+              
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('🔄 Force refreshed all friend data!'),
+                  backgroundColor: Colors.orange,
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
+          ),
           IconButton(
             icon: Icon(
               Icons.person_add, 
@@ -384,30 +543,33 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
                 ),
               ),
 
-              // Challenge Button - Flexible size
+              // Challenge Button - Longer for better visibility
               Flexible(
-                flex: 1,
-                child: Container(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: isSmallScreen ? 8 : isMediumScreen ? 12 : 16,
-                    vertical: isSmallScreen ? 6 : 8,
-                  ),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFFE8B4FF), Color(0xFFC490FF)],
+                flex: 2,
+                child: GestureDetector(
+                  onTap: () => _challengeFriend(friend),
+                  child: Container(
+                    height: isSmallScreen ? 36 : 40,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isSmallScreen ? 16 : 20,
+                      vertical: isSmallScreen ? 8 : 10,
                     ),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: GestureDetector(
-                    onTap: () => _challengeFriend(friend),
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        isSmallScreen ? 'Battle' : 'Challenge',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: isSmallScreen ? 10 : 12,
-                          fontWeight: FontWeight.bold,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFE8B4FF), Color(0xFFC490FF)],
+                      ),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Center(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          isSmallScreen ? 'Battle' : 'Duel',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: isSmallScreen ? 12 : 14,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ),
@@ -640,8 +802,8 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
               ),
               SizedBox(width: isSmallScreen ? 10 : 15),
 
-              Flexible(
-                flex: 3,
+              Expanded(
+                flex: 4,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -679,40 +841,148 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
                 ),
               ),
 
-              SizedBox(width: isSmallScreen ? 8 : 15),
+              SizedBox(width: isSmallScreen ? 6 : 12),
               
-              Flexible(
-                flex: 1,
-                child: ElevatedButton(
-                  onPressed: () => _sendFriendRequest(user),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF5B9EF3),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding: EdgeInsets.symmetric(
-                      horizontal: isSmallScreen ? 12 : 16,
-                      vertical: isSmallScreen ? 6 : 8,
-                    ),
-                  ),
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      'Add',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: isSmallScreen ? 10 : 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
+              // BIGGER BUTTON AREA - Fixed width for consistent button size
+              SizedBox(
+                width: isSmallScreen ? 70 : 100,
+                child: _buildActionButton(user, isSmallScreen),
               ),
             ],
           ),
         );
       },
     );
+  }
+
+  Widget _buildActionButton(Map<String, dynamic> user, bool isSmallScreen) {
+    final userId = user['id'];
+    final relationshipStatus = _relationshipStatus[userId] ?? 'none';
+    final isLoading = _sendingRequests[userId] == true;
+    
+    if (relationshipStatus == 'friends') {
+      return Container(
+        width: double.infinity,
+        height: isSmallScreen ? 36 : 42,
+        decoration: BoxDecoration(
+          color: const Color(0xFF7ED321),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Center(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.check_circle,
+                size: isSmallScreen ? 16 : 18,
+                color: Colors.white,
+              ),
+              SizedBox(width: isSmallScreen ? 4 : 6),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    'Friends',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: isSmallScreen ? 12 : 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    } else if (relationshipStatus == 'pending') {
+      return GestureDetector(
+        onTap: () async {
+          // FORCE REFRESH when pending button is tapped
+          print('🔄 FORCE REFRESH tapped for user: ${user['name']}');
+          await _refreshRelationshipStatus(userId);
+        },
+        child: Container(
+          width: double.infinity,
+          height: isSmallScreen ? 36 : 42,
+          decoration: BoxDecoration(
+            color: Colors.orange,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Center(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.schedule,
+                  size: isSmallScreen ? 16 : 18,
+                  color: Colors.white,
+                ),
+                SizedBox(width: isSmallScreen ? 4 : 6),
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      'Pending',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: isSmallScreen ? 12 : 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    } else {
+      return ElevatedButton(
+        onPressed: isLoading ? null : () => _sendFriendRequest(user),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: isLoading ? Colors.grey[400] : const Color(0xFF5B9EF3),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          minimumSize: Size(double.infinity, isSmallScreen ? 36 : 42),
+          padding: EdgeInsets.symmetric(horizontal: 12),
+        ),
+        child: isLoading
+            ? SizedBox(
+                width: isSmallScreen ? 16 : 18,
+                height: isSmallScreen ? 16 : 18,
+                child: const CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.person_add,
+                    size: isSmallScreen ? 16 : 18,
+                    color: Colors.white,
+                  ),
+                  SizedBox(width: isSmallScreen ? 4 : 6),
+                  Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        isSmallScreen ? 'Add' : 'Add Friend',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: isSmallScreen ? 12 : 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+      );
+    }
   }
 
   Widget _buildEmptyState({
@@ -827,15 +1097,33 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
           ),
           ElevatedButton(
             onPressed: () async {
-              Navigator.pop(context);
+              final navigator = Navigator.of(context);
+              final scaffoldMessenger = ScaffoldMessenger.of(context);
+              navigator.pop();
               final success = await _friendsService.challengeFriend(friend['id']);
-              if (success && mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Challenge sent to ${friend['name']}!'),
-                    backgroundColor: const Color(0xFF7ED321),
-                  ),
-                );
+              if (success) {
+                if (mounted) {
+                  scaffoldMessenger.showSnackBar(
+                    SnackBar(
+                      content: Text('Challenge sent to ${friend['name']}!'),
+                      backgroundColor: const Color(0xFF7ED321),
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  );
+                }
+              } else {
+                if (mounted) {
+                  scaffoldMessenger.showSnackBar(
+                    const SnackBar(
+                      content: Text('Failed to send challenge. Please try again.'),
+                      backgroundColor: Colors.red,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
               }
             },
             style: ElevatedButton.styleFrom(
@@ -897,15 +1185,37 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
           ),
           ElevatedButton(
             onPressed: () async {
-              Navigator.pop(context);
+              final navigator = Navigator.of(context);
+              final scaffoldMessenger = ScaffoldMessenger.of(context);
+              navigator.pop();
               final success = await _friendsService.removeFriend(friend['id']);
-              if (success && mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('${friend['name']} removed from friends'),
-                    backgroundColor: Colors.orange,
-                  ),
-                );
+              if (success) {
+                // Refresh the relationship status to ensure UI updates
+                await _friendsService.forceRefreshRelationship(friend['id']);
+                await _refreshRelationshipStatus(friend['id']);
+                  
+                if (mounted) {
+                  scaffoldMessenger.showSnackBar(
+                    SnackBar(
+                      content: Text('${friend['name']} removed from friends'),
+                      backgroundColor: Colors.orange,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  );
+                }
+              } else {
+                if (mounted) {
+                  scaffoldMessenger.showSnackBar(
+                    const SnackBar(
+                      content: Text('Failed to remove friend. Please try again.'),
+                      backgroundColor: Colors.red,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
               }
             },
             style: ElevatedButton.styleFrom(
@@ -934,42 +1244,209 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
       request['fromUserId'],
     );
     
-    if (success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${request['name']} is now your friend!'),
-          backgroundColor: const Color(0xFF7ED321),
-        ),
-      );
+    if (success) {
+      // Force refresh the relationship status with cleanup
+      await _friendsService.forceRefreshRelationship(request['fromUserId']);
+      await _refreshRelationshipStatus(request['fromUserId']);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text('${request['name']} is now your friend!'),
+                ),
+              ],
+            ),
+            backgroundColor: const Color(0xFF7ED321),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to accept friend request. Please try again.'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
   void _declineFriendRequest(Map<String, dynamic> request) async {
     final success = await _friendsService.declineFriendRequest(request['id']);
     
-    if (success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Friend request declined'),
-          backgroundColor: Colors.orange,
-        ),
-      );
+    if (success) {
+      // Force refresh the relationship status with cleanup
+      await _friendsService.forceRefreshRelationship(request['fromUserId']);
+      await _refreshRelationshipStatus(request['fromUserId']);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Friend request declined'),
+            backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(Radius.circular(10)),
+            ),
+          ),
+        );
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to decline friend request. Please try again.'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
   void _sendFriendRequest(Map<String, dynamic> user) async {
-    final success = await _friendsService.sendFriendRequest(
-      user['id'],
-      message: 'Hi! Let\'s be friends and play math games together!',
-    );
+    final userId = user['id'];
+    print('FriendsScreen: Sending friend request to user: ${user['name']} ($userId)');
     
-    if (success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Friend request sent to ${user['name']}!'),
-          backgroundColor: const Color(0xFF5B9EF3),
-        ),
+    // Prevent double-tapping
+    if (_sendingRequests[userId] == true) return;
+    
+    // Capture ScaffoldMessenger before async operations
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    
+    setState(() {
+      _sendingRequests[userId] = true;
+    });
+    
+    try {
+      print('FriendsScreen: Checking if already friends...');
+      // Check if already friends or request already sent
+      final alreadyFriends = await _friendsService.areFriends(userId);
+      if (alreadyFriends) {
+        print('FriendsScreen: Users are already friends');
+        if (mounted) {
+          scaffoldMessenger.showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.info_outline, color: Colors.white),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text('You are already friends with ${user['name']}!'),
+                  ),
+                ],
+              ),
+              backgroundColor: Colors.orange,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          );
+        }
+        return;
+      }
+      
+      print('FriendsScreen: Attempting to send friend request...');
+      final success = await _friendsService.sendFriendRequest(
+        userId,
+        message: 'Hi! Let\'s be friends and play math games together!',
       );
+      
+      print('FriendsScreen: Friend request result: $success');
+      
+      if (success) {
+        print('FriendsScreen: Friend request sent successfully');
+        if (mounted) {
+          scaffoldMessenger.showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.send, color: Colors.white),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text('Friend request sent to ${user['name']}!'),
+                  ),
+                ],
+              ),
+              backgroundColor: const Color(0xFF5B9EF3),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          );
+          
+          // Immediate status refresh after successful operation
+          await _refreshRelationshipStatus(userId);
+          
+          // Also trigger refresh for other search results (in case of related changes)
+          Future.delayed(const Duration(milliseconds: 500), () {
+            if (mounted) _refreshVisibleStatuses();
+          });
+        }
+      } else {
+        print('FriendsScreen: Failed to send friend request');
+        if (mounted) {
+          scaffoldMessenger.showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.white),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text('Failed to send friend request. Please check your connection and try again.'),
+                  ),
+                ],
+              ),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('FriendsScreen: Exception in _sendFriendRequest: $e');
+      if (mounted) {
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text('Error: $e'),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _sendingRequests[userId] = false;
+        });
+      }
     }
   }
 }

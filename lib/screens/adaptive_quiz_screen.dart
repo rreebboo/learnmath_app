@@ -68,15 +68,29 @@ class _AdaptiveQuizScreenState extends State<AdaptiveQuizScreen>
   }
   
   void _generateNewQuestion() {
-    setState(() {
-      _currentQuestion = _quizEngine.generateQuestion();
-      _selectedAnswer = null;
-      _showFeedback = false;
-    });
+    try {
+      final newQuestion = _quizEngine.generateQuestion();
+      setState(() {
+        _currentQuestion = newQuestion;
+        _selectedAnswer = null;
+        _showFeedback = false;
+      });
+    } catch (e) {
+      print('Error generating question: $e');
+      // Handle error gracefully - could show error dialog or retry
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Error generating question. Please try again.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
   
   void _selectAnswer(int answer) {
-    if (_selectedAnswer != null || _showFeedback) return;
+    if (_selectedAnswer != null || _showFeedback || _currentQuestion == null) return;
     
     setState(() {
       _selectedAnswer = answer;
@@ -85,10 +99,23 @@ class _AdaptiveQuizScreenState extends State<AdaptiveQuizScreen>
       _showFeedback = true;
     });
     
-    _quizEngine.submitAnswer(_currentQuestion!, answer);
-    
-    // Save attempt to Firebase
-    _progressService.saveQuizAttempt(_quizEngine.attempts.last);
+    try {
+      _quizEngine.submitAnswer(_currentQuestion!, answer);
+      
+      // Save attempt to Firebase if attempts exist
+      if (_quizEngine.attempts.isNotEmpty) {
+        _progressService.saveQuizAttempt(_quizEngine.attempts.last);
+      }
+    } catch (e) {
+      // Handle quiz engine errors gracefully
+      print('Error submitting answer: $e');
+      // Reset feedback state if error occurs
+      setState(() {
+        _showFeedback = false;
+        _selectedAnswer = null;
+      });
+      return;
+    }
     
     _backgroundAnimation = ColorTween(
       begin: const Color(0xFFF5F7FA),
@@ -101,12 +128,18 @@ class _AdaptiveQuizScreenState extends State<AdaptiveQuizScreen>
       _feedbackTimer = Timer(const Duration(seconds: 2), () {
         _feedbackController.reverse().then((_) {
           if (mounted) {
-            final stats = _quizEngine.getStats();
-            if (stats['isQuizComplete'] == true) {
-              _showQuizCompletionDialog();
-            } else if (stats['requiresLevelReset'] == true) {
-              _showLevelResetDialog();
-            } else {
+            try {
+              final stats = _quizEngine.getStats();
+              if (stats['isQuizComplete'] == true) {
+                _showQuizCompletionDialog();
+              } else if (stats['requiresLevelReset'] == true) {
+                _showLevelResetDialog();
+              } else {
+                _generateNewQuestion();
+              }
+            } catch (e) {
+              print('Error getting quiz stats: $e');
+              // Fallback to generating new question
               _generateNewQuestion();
             }
           }
@@ -637,8 +670,6 @@ class _AdaptiveQuizScreenState extends State<AdaptiveQuizScreen>
         final screenWidth = MediaQuery.of(context).size.width;
         final screenHeight = MediaQuery.of(context).size.height;
         final isSmallScreen = screenWidth < 360;
-        final isMediumScreen = screenWidth < 500;
-        final isShortScreen = screenHeight < 600;
         
         // For very small screens, use grid layout
         if (isSmallScreen && screenHeight < 650) {
@@ -684,7 +715,7 @@ class _AdaptiveQuizScreenState extends State<AdaptiveQuizScreen>
           children: _currentQuestion!.options.map((option) {
             return Padding(
               padding: EdgeInsets.only(
-                bottom: isSmallScreen ? 8 : isShortScreen ? 10 : 12
+                bottom: isSmallScreen ? 8 : (screenHeight < 700) ? 10 : 12
               ),
               child: SizedBox(
                 width: double.infinity,
@@ -811,10 +842,11 @@ class _AdaptiveQuizScreenState extends State<AdaptiveQuizScreen>
             ),
             ElevatedButton(
               onPressed: () async {
-                Navigator.pop(context);
-                await _endQuizSession();
+                final navigator = Navigator.of(context);
+                navigator.pop(); // Close the quit dialog
+                await _saveQuizSessionOnly();
                 if (mounted) {
-                  Navigator.pop(context);
+                  navigator.pop(); // Return to previous screen
                 }
               },
               style: ElevatedButton.styleFrom(
@@ -845,6 +877,19 @@ class _AdaptiveQuizScreenState extends State<AdaptiveQuizScreen>
       _showSessionSummary(stats);
     }
   }
+
+  Future<void> _saveQuizSessionOnly() async {
+    try {
+      final stats = _quizEngine.getStats();
+      
+      if (_quizEngine.attempts.isNotEmpty) {
+        await _progressService.saveQuizSession(_quizEngine.attempts, stats);
+        print('Quiz session saved successfully');
+      }
+    } catch (e) {
+      print('Error saving quiz session: $e');
+    }
+  }
   
   void _showLevelResetDialog() {
     final stats = _quizEngine.getStats();
@@ -861,7 +906,6 @@ class _AdaptiveQuizScreenState extends State<AdaptiveQuizScreen>
             final screenWidth = MediaQuery.of(context).size.width;
             final screenHeight = MediaQuery.of(context).size.height;
             final isSmallScreen = screenWidth < 360;
-            final isShortScreen = screenHeight < 600;
             
             return AlertDialog(
               shape: RoundedRectangleBorder(
@@ -980,7 +1024,6 @@ class _AdaptiveQuizScreenState extends State<AdaptiveQuizScreen>
             final screenWidth = MediaQuery.of(context).size.width;
             final screenHeight = MediaQuery.of(context).size.height;
             final isSmallScreen = screenWidth < 360;
-            final isShortScreen = screenHeight < 600;
             
             return AlertDialog(
               shape: RoundedRectangleBorder(
@@ -1053,10 +1096,11 @@ class _AdaptiveQuizScreenState extends State<AdaptiveQuizScreen>
                         width: double.infinity,
                         child: ElevatedButton(
                           onPressed: () async {
-                            Navigator.pop(context);
+                            final navigator = Navigator.of(context);
+                            navigator.pop();
                             await _endQuizSession();
                             if (mounted) {
-                              Navigator.pop(context);
+                              navigator.pop();
                             }
                           },
                           style: ElevatedButton.styleFrom(

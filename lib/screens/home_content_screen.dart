@@ -14,18 +14,67 @@ class HomeContent extends StatefulWidget {
   State<HomeContent> createState() => _HomeContentState();
 }
 
-class _HomeContentState extends State<HomeContent> {
+class _HomeContentState extends State<HomeContent> with TickerProviderStateMixin {
   final FirestoreService _firestoreService = FirestoreService();
   final UserPreferencesService _prefsService = UserPreferencesService.instance;
   Map<String, dynamic>? _userData;
   bool _isLoading = true;
   int _selectedLevel = 0; // 0: Easy, 1: Moderate, 2: Advanced
+  
+  // Animation controllers for flowing gradients
+  late AnimationController _animationController1;
+  late AnimationController _animationController2;
+  late AnimationController _animationController3;
+  late Animation<double> _animation1;
+  late Animation<double> _animation2;
+  late Animation<double> _animation3;
 
   @override
   void initState() {
     super.initState();
+    _initializeAnimations();
     _loadUserData();
     _loadSelectedDifficulty();
+  }
+
+  void _initializeAnimations() {
+    // Create animation controllers with balanced, visible but subtle speeds
+    _animationController1 = AnimationController(
+      duration: const Duration(milliseconds: 2500), // Slower for subtlety
+      vsync: this,
+    );
+    _animationController2 = AnimationController(
+      duration: const Duration(milliseconds: 3000), // Moderate speed
+      vsync: this,
+    );
+    _animationController3 = AnimationController(
+      duration: const Duration(milliseconds: 2000), // Balanced speed
+      vsync: this,
+    );
+
+    // Create animations with different curves
+    _animation1 = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController1, curve: Curves.easeInOut)
+    );
+    _animation2 = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController2, curve: Curves.easeInOutSine)
+    );
+    _animation3 = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController3, curve: Curves.easeInOutQuart)
+    );
+
+    // Start repeating animations with different patterns
+    _animationController1.repeat(reverse: true);
+    _animationController2.repeat();
+    _animationController3.repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _animationController1.dispose();
+    _animationController2.dispose();
+    _animationController3.dispose();
+    super.dispose();
   }
 
   Future<void> _loadUserData() async {
@@ -248,12 +297,12 @@ class _HomeContentState extends State<HomeContent> {
                 ),
                 const SizedBox(height: 15),
                 
-                // Level Cards
+                // Level Cards with Animated Gradients
                 _buildLevelCard(
                   0,
                   'EASY',
-                  '1-digit numbers',
-                  const Color(0xFF4CAF50), // Easy level - consistent green
+                  '1-digit + 1-digit numbers',
+                  const Color(0xFF9CCC65), // Easy level - base green
                   Icons.star,
                   1,
                 ),
@@ -261,8 +310,8 @@ class _HomeContentState extends State<HomeContent> {
                 _buildLevelCard(
                   1,
                   'MODERATE',
-                  '2-3 digit numbers',
-                  const Color(0xFFFF9800), // Moderate level - consistent orange
+                  '2-digit + 1-digit numbers',
+                  const Color(0xFFFFB74D), // Moderate level - base orange
                   Icons.star,
                   2,
                 ),
@@ -270,8 +319,8 @@ class _HomeContentState extends State<HomeContent> {
                 _buildLevelCard(
                   2,
                   'ADVANCED',
-                  '4+ digit numbers',
-                  const Color(0xFFE53935), // Advanced level - consistent red
+                  '3-digit + 2-digit numbers',
+                  const Color(0xFFEF5350), // Advanced level - base red
                   Icons.star,
                   3,
                 ),
@@ -423,16 +472,18 @@ _buildQuickActionCard(
               );
             }
           },
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
+          child: AnimatedBuilder(
+            animation: _getAnimationForIndex(index),
+            builder: (context, child) => AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
               // Use full brightness for the colors now
               color: isSelected ? brighterColor : color,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: isSelected ? brighterColor : darkerColor,
-                width: isSelected ? 2.5 : 2,
+                color: _getAnimatedBorderColor(index, isSelected, color, brighterColor),
+                width: isSelected ? 3 : 2,
               ),
               boxShadow: [
                 BoxShadow(
@@ -450,14 +501,12 @@ _buildQuickActionCard(
                     spreadRadius: -2,
                   ),
               ],
-              // Add a subtle gradient overlay for more depth
+              // Enhanced neon gradient with flowing effect
               gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  (isSelected ? brighterColor : color).withValues(alpha: 1.0),
-                  (isSelected ? brighterColor : color).withValues(alpha: 0.9),
-                ],
+                begin: _getAnimatedBeginAlignment(index),
+                end: _getAnimatedEndAlignment(index),
+                colors: _getGradientColors(index, isSelected, color, brighterColor),
+                stops: _getAnimatedStops(index),
               ),
             ),
             child: Row(
@@ -483,9 +532,9 @@ _buildQuickActionCard(
                       style: TextStyle(
                         color: isSelected ? brighterColor : darkerColor,
                         fontWeight: FontWeight.bold,
-                        fontSize: index == 0 ? 19 : index == 1 ? 15 : 13,
+                        fontSize: 20,
                       ),
-                      child: Text(index == 0 ? '1' : index == 1 ? '23' : '123+'),
+                      child: Text(index == 0 ? '1' : index == 1 ? '2' : '3'),
                     ),
                   ),
                 ),
@@ -502,9 +551,14 @@ _buildQuickActionCard(
                           fontWeight: FontWeight.bold,
                           shadows: [
                             Shadow(
+                              color: Colors.black.withValues(alpha: 0.6),
+                              offset: const Offset(2, 2),
+                              blurRadius: 4,
+                            ),
+                            Shadow(
                               color: Colors.black.withValues(alpha: 0.3),
                               offset: const Offset(1, 1),
-                              blurRadius: 3,
+                              blurRadius: 2,
                             ),
                           ],
                         ),
@@ -518,9 +572,14 @@ _buildQuickActionCard(
                           fontSize: isSelected ? 13 : 12,
                           shadows: [
                             Shadow(
-                              color: Colors.black.withValues(alpha: 0.25),
-                              offset: const Offset(1, 1),
-                              blurRadius: 2,
+                              color: Colors.black.withValues(alpha: 0.5),
+                              offset: const Offset(1.5, 1.5),
+                              blurRadius: 3,
+                            ),
+                            Shadow(
+                              color: Colors.black.withValues(alpha: 0.2),
+                              offset: const Offset(0.5, 0.5),
+                              blurRadius: 1,
                             ),
                           ],
                         ),
@@ -554,6 +613,7 @@ _buildQuickActionCard(
                   ),
                 ),
               ],
+            ),
             ),
           ),
         ),
@@ -660,5 +720,159 @@ _buildQuickActionCard(
         ),
       ],
     );
+  }
+
+  // Generate subtle but visible gradient colors with gentle animation
+  List<Color> _getGradientColors(int index, bool isSelected, Color baseColor, Color brighterColor) {
+    double animValue = _getAnimationForIndex(index).value;
+    Color primary = isSelected ? brighterColor : baseColor;
+    
+    switch (index) {
+      case 0: // Easy - Subtle Green Gradient
+        return [
+          primary,
+          Color.lerp(primary, const Color(0xFF81C784), 0.3 + (animValue * 0.2)) ?? primary, // Gentle animated green
+          Color.lerp(primary, const Color(0xFF66BB6A), 0.4 + (animValue * 0.1)) ?? primary, // Flowing green
+          Color.lerp(primary, const Color(0xFFA5D6A7), 0.5) ?? primary, // Light green
+        ];
+      case 1: // Moderate - Subtle Orange Gradient  
+        return [
+          primary,
+          Color.lerp(primary, const Color(0xFFFFAB40), 0.3 + (animValue * 0.2)) ?? primary, // Gentle animated orange
+          Color.lerp(primary, const Color(0xFFFF9800), 0.4 + (animValue * 0.1)) ?? primary, // Flowing orange
+          Color.lerp(primary, const Color(0xFFFFCC02), 0.5) ?? primary, // Light orange
+        ];
+      case 2: // Advanced - Subtle Red Gradient
+        return [
+          primary,
+          Color.lerp(primary, const Color(0xFFE57373), 0.3 + (animValue * 0.2)) ?? primary, // Gentle animated red
+          Color.lerp(primary, const Color(0xFFF44336), 0.4 + (animValue * 0.1)) ?? primary, // Flowing red
+          Color.lerp(primary, const Color(0xFFEF9A9A), 0.5) ?? primary, // Light red
+        ];
+      default:
+        return [primary, brighterColor, primary, brighterColor];
+    }
+  }
+
+  // Animation helper methods
+  Animation<double> _getAnimationForIndex(int index) {
+    switch (index) {
+      case 0: return _animation1;
+      case 1: return _animation2;
+      case 2: return _animation3;
+      default: return _animation1;
+    }
+  }
+
+  Alignment _getAnimatedBeginAlignment(int index) {
+    double value = _getAnimationForIndex(index).value;
+    switch (index) {
+      case 0: // Easy - Dramatic diagonal sweep
+        return Alignment.lerp(
+          Alignment.topLeft, 
+          Alignment.bottomCenter, 
+          value
+        ) ?? Alignment.topLeft;
+      case 1: // Moderate - Full horizontal sweep
+        return Alignment.lerp(
+          Alignment.centerLeft, 
+          Alignment.centerRight, 
+          value
+        ) ?? Alignment.centerLeft;
+      case 2: // Advanced - Wild circular motion
+        return Alignment.lerp(
+          Alignment.topCenter, 
+          Alignment.bottomLeft, 
+          value
+        ) ?? Alignment.topCenter;
+      default:
+        return Alignment.topLeft;
+    }
+  }
+
+  Alignment _getAnimatedEndAlignment(int index) {
+    double value = _getAnimationForIndex(index).value;
+    switch (index) {
+      case 0: // Easy - Dramatic diagonal sweep
+        return Alignment.lerp(
+          Alignment.bottomRight, 
+          Alignment.topCenter, 
+          value
+        ) ?? Alignment.bottomRight;
+      case 1: // Moderate - Full horizontal sweep
+        return Alignment.lerp(
+          Alignment.centerRight, 
+          Alignment.centerLeft, 
+          value
+        ) ?? Alignment.centerRight;
+      case 2: // Advanced - Wild circular motion
+        return Alignment.lerp(
+          Alignment.bottomCenter, 
+          Alignment.topRight, 
+          value
+        ) ?? Alignment.bottomCenter;
+      default:
+        return Alignment.bottomRight;
+    }
+  }
+
+  List<double> _getAnimatedStops(int index) {
+    double value = _getAnimationForIndex(index).value;
+    double subtleOffset = value * 0.3; // Subtle movement for gentle flow
+    
+    switch (index) {
+      case 0: // Easy - Gentle wave
+        return [
+          0.0,
+          0.25 + (subtleOffset * 0.5),
+          0.6 + (subtleOffset * 0.3),
+          1.0
+        ];
+      case 1: // Moderate - Soft pulsing
+        return [
+          0.0,
+          0.2 + (subtleOffset * 0.6),
+          0.7 + (subtleOffset * 0.4),
+          1.0
+        ];
+      case 2: // Advanced - Smooth transitions
+        return [
+          0.0,
+          0.15 + (subtleOffset * 0.7),
+          0.65 + (subtleOffset * 0.5),
+          1.0
+        ];
+      default:
+        return [0.0, 0.3, 0.7, 1.0];
+    }
+  }
+
+  // Generate animated neon border colors
+  Color _getAnimatedBorderColor(int index, bool isSelected, Color baseColor, Color brighterColor) {
+    double animValue = _getAnimationForIndex(index).value;
+    Color primaryBorder = isSelected ? brighterColor : baseColor;
+    
+    switch (index) {
+      case 0: // Easy - Gentle green neon border
+        return Color.lerp(
+          primaryBorder,
+          const Color(0xFF4CAF50), 
+          0.3 + (animValue * 0.4)
+        ) ?? primaryBorder;
+      case 1: // Moderate - Warm orange neon border
+        return Color.lerp(
+          primaryBorder,
+          const Color(0xFFFF9800), 
+          0.3 + (animValue * 0.4)
+        ) ?? primaryBorder;
+      case 2: // Advanced - Energetic red neon border
+        return Color.lerp(
+          primaryBorder,
+          const Color(0xFFE53935), 
+          0.3 + (animValue * 0.4)
+        ) ?? primaryBorder;
+      default:
+        return primaryBorder;
+    }
   }
 }

@@ -211,11 +211,11 @@ class QuizEngine {
         break;
       case DifficultyLevel.medium:
         operand1 = _random.nextInt(90) + 10; // 10-99 (2-digit)
-        operand2 = _random.nextInt(90) + 10; // 10-99 (2-digit)
+        operand2 = _random.nextInt(9) + 1; // 1-9 (1-digit)
         break;
       case DifficultyLevel.hard:
         operand1 = _random.nextInt(900) + 100; // 100-999 (3-digit)
-        operand2 = _random.nextInt(900) + 100; // 100-999 (3-digit)
+        operand2 = _random.nextInt(90) + 10; // 10-99 (2-digit)
         break;
     }
     
@@ -237,26 +237,22 @@ class QuizEngine {
     
     switch (_currentDifficulty) {
       case DifficultyLevel.easy:
-        operand1 = _random.nextInt(8) + 2; // 2-9 (1-digit)
-        operand2 = _random.nextInt(operand1 - 1) + 1; // 1 to operand1-1 (1-digit)
+        operand1 = _random.nextInt(9) + 1; // 1-9 (1-digit)
+        operand2 = _random.nextInt(9) + 1; // 1-9 (1-digit)
+        // Ensure operand1 >= operand2 to avoid negative results
+        if (operand2 > operand1) {
+          final temp = operand1;
+          operand1 = operand2;
+          operand2 = temp;
+        }
         break;
       case DifficultyLevel.medium:
         operand1 = _random.nextInt(90) + 10; // 10-99 (2-digit)
-        operand2 = _random.nextInt(90) + 10; // 10-99 (2-digit)
-        if (operand2 > operand1) {
-          final temp = operand1;
-          operand1 = operand2;
-          operand2 = temp;
-        }
+        operand2 = _random.nextInt(9) + 1; // 1-9 (1-digit)
         break;
       case DifficultyLevel.hard:
         operand1 = _random.nextInt(900) + 100; // 100-999 (3-digit)
-        operand2 = _random.nextInt(900) + 100; // 100-999 (3-digit)
-        if (operand2 > operand1) {
-          final temp = operand1;
-          operand1 = operand2;
-          operand2 = temp;
-        }
+        operand2 = _random.nextInt(90) + 10; // 10-99 (2-digit)
         break;
     }
     
@@ -283,11 +279,11 @@ class QuizEngine {
         break;
       case DifficultyLevel.medium:
         operand1 = _random.nextInt(90) + 10; // 10-99 (2-digit)
-        operand2 = _random.nextInt(90) + 10; // 10-99 (2-digit)
+        operand2 = _random.nextInt(9) + 1; // 1-9 (1-digit)
         break;
       case DifficultyLevel.hard:
         operand1 = _random.nextInt(900) + 100; // 100-999 (3-digit)
-        operand2 = _random.nextInt(900) + 100; // 100-999 (3-digit)
+        operand2 = _random.nextInt(90) + 10; // 10-99 (2-digit)
         break;
     }
     
@@ -309,15 +305,15 @@ class QuizEngine {
     
     switch (_currentDifficulty) {
       case DifficultyLevel.easy:
-        divisor = _random.nextInt(8) + 2; // 2-9 (1-digit)
+        divisor = _random.nextInt(9) + 1; // 1-9 (1-digit)
         quotient = _random.nextInt(9) + 1; // 1-9 (1-digit)
         break;
       case DifficultyLevel.medium:
-        divisor = _random.nextInt(90) + 10; // 10-99 (2-digit)
+        divisor = _random.nextInt(9) + 1; // 1-9 (1-digit)
         quotient = _random.nextInt(90) + 10; // 10-99 (2-digit)
         break;
       case DifficultyLevel.hard:
-        divisor = _random.nextInt(900) + 100; // 100-999 (3-digit)
+        divisor = _random.nextInt(90) + 10; // 10-99 (2-digit)
         quotient = _random.nextInt(900) + 100; // 100-999 (3-digit)
         break;
     }

@@ -42,20 +42,25 @@ class MathService {
     
     switch (difficulty.toLowerCase()) {
       case 'easy':
-        operand1 = _random.nextInt(10) + 1; // 1-10
-        operand2 = _random.nextInt(10) + 1; // 1-10
+        // Easy: 1-digit + 1-digit (1-9 + 1-9)
+        operand1 = _random.nextInt(9) + 1; // 1-9 (1-digit)
+        operand2 = _random.nextInt(9) + 1; // 1-9 (1-digit)
         break;
       case 'medium':
-        operand1 = _random.nextInt(50) + 1; // 1-50
-        operand2 = _random.nextInt(50) + 1; // 1-50
+      case 'moderate':
+        // Moderate: 2-digit + 1-digit (10-99 + 1-9)
+        operand1 = _random.nextInt(90) + 10; // 10-99 (2-digit)
+        operand2 = _random.nextInt(9) + 1; // 1-9 (1-digit)
         break;
       case 'hard':
-        operand1 = _random.nextInt(100) + 1; // 1-100
-        operand2 = _random.nextInt(100) + 1; // 1-100
+      case 'advanced':
+        // Advanced: 3-digit + 2-digit (100-999 + 10-99)
+        operand1 = _random.nextInt(900) + 100; // 100-999 (3-digit)
+        operand2 = _random.nextInt(90) + 10; // 10-99 (2-digit)
         break;
       default:
-        operand1 = _random.nextInt(10) + 1;
-        operand2 = _random.nextInt(10) + 1;
+        operand1 = _random.nextInt(9) + 1;
+        operand2 = _random.nextInt(9) + 1;
     }
 
     final correctAnswer = operand1 + operand2;
@@ -77,20 +82,36 @@ class MathService {
     
     switch (difficulty.toLowerCase()) {
       case 'easy':
-        operand1 = _random.nextInt(10) + 6; // 6-15
-        operand2 = _random.nextInt(operand1 - 1) + 1; // 1 to operand1-1
+        // Easy: 1-digit - 1-digit (1-9 - 1-9, result >= 0)
+        operand1 = _random.nextInt(9) + 1; // 1-9 (1-digit)
+        operand2 = _random.nextInt(9) + 1; // 1-9 (1-digit)
+        // Ensure operand1 >= operand2 to avoid negative results
+        if (operand2 > operand1) {
+          final temp = operand1;
+          operand1 = operand2;
+          operand2 = temp;
+        }
         break;
       case 'medium':
-        operand1 = _random.nextInt(50) + 26; // 26-75
-        operand2 = _random.nextInt(operand1 - 1) + 1; // 1 to operand1-1
+      case 'moderate':
+        // Moderate: 2-digit - 1-digit (10-99 - 1-9)
+        operand1 = _random.nextInt(90) + 10; // 10-99 (2-digit)
+        operand2 = _random.nextInt(9) + 1; // 1-9 (1-digit)
         break;
       case 'hard':
-        operand1 = _random.nextInt(100) + 51; // 51-150
-        operand2 = _random.nextInt(operand1 - 1) + 1; // 1 to operand1-1
+      case 'advanced':
+        // Advanced: 3-digit - 2-digit (100-999 - 10-99)
+        operand1 = _random.nextInt(900) + 100; // 100-999 (3-digit)
+        operand2 = _random.nextInt(90) + 10; // 10-99 (2-digit)
         break;
       default:
-        operand1 = _random.nextInt(10) + 6;
-        operand2 = _random.nextInt(operand1 - 1) + 1;
+        operand1 = _random.nextInt(9) + 1;
+        operand2 = _random.nextInt(9) + 1;
+        if (operand2 > operand1) {
+          final temp = operand1;
+          operand1 = operand2;
+          operand2 = temp;
+        }
     }
 
     final correctAnswer = operand1 - operand2;
@@ -112,20 +133,25 @@ class MathService {
     
     switch (difficulty.toLowerCase()) {
       case 'easy':
-        operand1 = _random.nextInt(5) + 1; // 1-5
-        operand2 = _random.nextInt(5) + 1; // 1-5
+        // Easy: 1-digit × 1-digit (1-9 × 1-9)
+        operand1 = _random.nextInt(9) + 1; // 1-9 (1-digit)
+        operand2 = _random.nextInt(9) + 1; // 1-9 (1-digit)
         break;
       case 'medium':
-        operand1 = _random.nextInt(10) + 1; // 1-10
-        operand2 = _random.nextInt(10) + 1; // 1-10
+      case 'moderate':
+        // Moderate: 2-digit × 1-digit (10-99 × 1-9)
+        operand1 = _random.nextInt(90) + 10; // 10-99 (2-digit)
+        operand2 = _random.nextInt(9) + 1; // 1-9 (1-digit)
         break;
       case 'hard':
-        operand1 = _random.nextInt(12) + 1; // 1-12
-        operand2 = _random.nextInt(12) + 1; // 1-12
+      case 'advanced':
+        // Advanced: 3-digit × 2-digit (100-999 × 10-99)
+        operand1 = _random.nextInt(900) + 100; // 100-999 (3-digit)
+        operand2 = _random.nextInt(90) + 10; // 10-99 (2-digit)
         break;
       default:
-        operand1 = _random.nextInt(5) + 1;
-        operand2 = _random.nextInt(5) + 1;
+        operand1 = _random.nextInt(9) + 1;
+        operand2 = _random.nextInt(9) + 1;
     }
 
     final correctAnswer = operand1 * operand2;
@@ -147,20 +173,25 @@ class MathService {
     
     switch (difficulty.toLowerCase()) {
       case 'easy':
-        divisor = _random.nextInt(5) + 2; // 2-6
-        quotient = _random.nextInt(5) + 1; // 1-5
+        // Easy: (1-digit × 1-digit) ÷ 1-digit = 1-digit
+        divisor = _random.nextInt(9) + 1; // 1-9 (1-digit)
+        quotient = _random.nextInt(9) + 1; // 1-9 (1-digit)
         break;
       case 'medium':
-        divisor = _random.nextInt(8) + 2; // 2-9
-        quotient = _random.nextInt(10) + 1; // 1-10
+      case 'moderate':
+        // Moderate: (2-digit × 1-digit) ÷ 1-digit = 2-digit
+        divisor = _random.nextInt(9) + 1; // 1-9 (1-digit)
+        quotient = _random.nextInt(90) + 10; // 10-99 (2-digit)
         break;
       case 'hard':
-        divisor = _random.nextInt(10) + 2; // 2-11
-        quotient = _random.nextInt(12) + 1; // 1-12
+      case 'advanced':
+        // Advanced: (3-digit × 2-digit) ÷ 2-digit = 3-digit
+        divisor = _random.nextInt(90) + 10; // 10-99 (2-digit)
+        quotient = _random.nextInt(900) + 100; // 100-999 (3-digit)
         break;
       default:
-        divisor = _random.nextInt(5) + 2;
-        quotient = _random.nextInt(5) + 1;
+        divisor = _random.nextInt(9) + 1;
+        quotient = _random.nextInt(9) + 1;
     }
 
     final operand1 = divisor * quotient; // Ensure whole number result
@@ -218,9 +249,11 @@ class MathService {
         difficultyMultiplier = 1.0;
         break;
       case 'medium':
+      case 'moderate':
         difficultyMultiplier = 1.5;
         break;
       case 'hard':
+      case 'advanced':
         difficultyMultiplier = 2.0;
         break;
     }
