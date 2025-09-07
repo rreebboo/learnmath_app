@@ -101,6 +101,28 @@ service cloud.firestore {
           (timestamp.date(resource.data.completedAt).toMillis() + 60000) > timestamp.date(request.time).toMillis();
       }
 
+      // Quiz sessions subcollection
+      match /quiz_sessions/{sessionId} {
+        // Read: Users can only read their own quiz sessions
+        allow read: if isAuthenticated() && isOwner(userId);
+        
+        // Create: Users can only create their own quiz sessions
+        allow create: if isAuthenticated() 
+          && isOwner(userId)
+          && isValidPracticeSession();
+        
+        // Update: Allow corrections within 5 minutes to prevent abuse
+        allow update: if isAuthenticated() 
+          && isOwner(userId)
+          && isValidPracticeSession()
+          && (timestamp.date(resource.data.completedAt).toMillis() + 300000) > timestamp.date(request.time).toMillis();
+        
+        // Delete: Generally not allowed to preserve data integrity
+        allow delete: if isAuthenticated() && isOwner(userId) && 
+          // Allow deletion within 1 minute for immediate corrections
+          (timestamp.date(resource.data.completedAt).toMillis() + 60000) > timestamp.date(request.time).toMillis();
+      }
+
       // Topic progress subcollection
       match /topic_progress/{topicId} {
         // Read: Users can read their own topic progress
@@ -122,6 +144,59 @@ service cloud.firestore {
         
         // Delete: Allow users to reset their progress if needed
         allow delete: if isAuthenticated() && isOwner(userId);
+      }
+
+      // Friends subcollection
+      match /friends/{friendId} {
+        // Read: Users can read their own friends list
+        allow read: if isAuthenticated() && isOwner(userId);
+        
+        // Create: Allow creating friendship records
+        allow create: if isAuthenticated() && 
+          request.resource.data.keys().hasAll(['status', 'addedAt']) &&
+          request.resource.data.status == 'accepted' && 
+          // Allow if user is creating in their own collection OR if they are being added as a friend
+          (request.auth.uid == userId || request.auth.uid == friendId);
+        
+        // Update: Users can update friendship status in their own collection
+        allow update: if isAuthenticated() && isOwner(userId);
+        
+        // Delete: Users can remove friends from their own collection OR remove themselves from others' collections
+        // Updated to ensure cross-user deletion permissions work properly
+        allow delete: if isAuthenticated() && (isOwner(userId) || request.auth.uid == friendId);
+      }
+
+      // Friend requests subcollection
+      match /friendRequests/{requestId} {
+        // Read: Users can read their own friend requests
+        allow read: if isAuthenticated() && isOwner(userId);
+        
+        // Create: Users can create friend requests
+        allow create: if isAuthenticated() && (
+          isOwner(userId) || // Creating in their own collection (outgoing requests)
+          (request.resource.data.keys().hasAll(['fromUserId', 'type']) && 
+           request.resource.data.fromUserId == request.auth.uid &&
+           request.resource.data.type == 'incoming') // Creating incoming request in target user's collection
+        );
+        
+        // Update: Users can update request status in their own collection
+        allow update: if isAuthenticated() && isOwner(userId) &&
+          // Allow updating status and adding timestamps
+          request.resource.data.keys().hasAll(resource.data.keys()) &&
+          (!resource.data.keys().hasAny(['fromUserId', 'toUserId', 'type']) || 
+           (request.resource.data.fromUserId == resource.data.fromUserId &&
+            request.resource.data.toUserId == resource.data.toUserId &&
+            request.resource.data.type == resource.data.type));
+        
+        // Delete: Allow deletion for request cleanup during accept/decline
+        allow delete: if isAuthenticated() && (
+          isOwner(userId) || // Users can delete from their own collection
+          // Allow cross-user deletion for cleanup (both users can delete requests between them)
+          (resource.data != null && (
+            (resource.data.keys().hasAny(['fromUserId']) && resource.data.fromUserId == request.auth.uid) ||
+            (resource.data.keys().hasAny(['toUserId']) && resource.data.toUserId == request.auth.uid)
+          ))
+        );
       }
     }
 
