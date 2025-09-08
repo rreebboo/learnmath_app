@@ -184,18 +184,22 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
         title: const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('👑', style: TextStyle(fontSize: 20)),
-            SizedBox(width: 8),
-            Text(
-              'Math Champions',
-              style: TextStyle(
-                color: Colors.black87,
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
+            Text('👑', style: TextStyle(fontSize: 18)),
+            SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                'Math Champions',
+                style: TextStyle(
+                  color: Colors.black87,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
               ),
             ),
-            SizedBox(width: 8),
-            Text('👑', style: TextStyle(fontSize: 20)),
+            SizedBox(width: 4),
+            Text('👑', style: TextStyle(fontSize: 18)),
           ],
         ),
         centerTitle: true,
@@ -276,8 +280,8 @@ body: RefreshIndicator(
             else if (_leaderboardData.isEmpty)
               SliverToBoxAdapter(
                 child: Container(
-                  margin: const EdgeInsets.all(20),
-                  padding: const EdgeInsets.all(30),
+                  margin: EdgeInsets.all(screenWidth * 0.05),
+                  padding: EdgeInsets.all(screenWidth * 0.075),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(20),
@@ -357,7 +361,12 @@ body: RefreshIndicator(
 Widget _buildHeaderSection(double screenWidth) {
     return Container(
       color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+      padding: EdgeInsets.fromLTRB(
+        screenWidth * 0.05, 
+        10, 
+        screenWidth * 0.05, 
+        20
+      ),
       child: Column(
         children: [
           const Text(
@@ -366,6 +375,9 @@ Widget _buildHeaderSection(double screenWidth) {
               color: Colors.grey,
               fontSize: 16,
             ),
+            textAlign: TextAlign.center,
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
           ),
           const SizedBox(height: 16),
           _buildToggleButtons(),
@@ -382,12 +394,14 @@ Widget _buildHeaderSection(double screenWidth) {
         color: const Color(0xFFF0F0F0),
         borderRadius: BorderRadius.circular(25),
       ),
-      child: Row(
-        children: [
-          _buildToggleButton('Weekly', selectedPeriod == 'weekly'),
-          _buildToggleButton('Monthly', selectedPeriod == 'monthly'),
-          _buildToggleButton('All-time', selectedPeriod == 'all-time'),
-        ],
+      child: IntrinsicHeight(
+        child: Row(
+          children: [
+            _buildToggleButton('Weekly', selectedPeriod == 'weekly'),
+            _buildToggleButton('Monthly', selectedPeriod == 'monthly'),
+            _buildToggleButton('All-time', selectedPeriod == 'all-time'),
+          ],
+        ),
       ),
     );
   }
@@ -411,7 +425,7 @@ Widget _buildHeaderSection(double screenWidth) {
           }
         },
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
           decoration: BoxDecoration(
             color: isSelected ? Colors.blue : Colors.transparent,
             borderRadius: BorderRadius.circular(25),
@@ -422,7 +436,10 @@ Widget _buildHeaderSection(double screenWidth) {
             style: TextStyle(
               color: isSelected ? Colors.white : Colors.grey.shade600,
               fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              fontSize: 14,
             ),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
           ),
         ),
       ),
@@ -433,7 +450,7 @@ Widget _buildHeaderSection(double screenWidth) {
     return Row(
       children: [
         Expanded(child: _buildGradeButton('Grade 1', selectedGrade == 'Grade 1')),
-        const SizedBox(width: 12),
+        const SizedBox(width: 8),
         Expanded(child: _buildGradeButton('Grade 2', selectedGrade == 'Grade 2')),
       ],
     );
@@ -450,18 +467,24 @@ Widget _buildHeaderSection(double screenWidth) {
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               Icons.star,
               color: isSelected ? Colors.white : Colors.grey.shade600,
               size: 16,
             ),
-            const SizedBox(width: 8),
-            Text(
-              text,
-              style: TextStyle(
-                color: isSelected ? Colors.white : Colors.grey.shade600,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                text,
+                style: TextStyle(
+                  color: isSelected ? Colors.white : Colors.grey.shade600,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                  fontSize: 14,
+                ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
               ),
             ),
           ],
@@ -491,7 +514,12 @@ Widget _buildPodiumSection(double screenWidth, double screenHeight) {
     }
     
 return Container(
-      margin: const EdgeInsets.fromLTRB(20, 10, 20, 10),
+      margin: EdgeInsets.fromLTRB(
+        screenWidth * 0.05, 
+        10, 
+        screenWidth * 0.05, 
+        10
+      ),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -584,23 +612,27 @@ Widget _buildPodiumPosition(LeaderboardUser user, int position, Color bgColor, b
               ),
             ),
             const SizedBox(height: 8),
-            Text(
-              isPlaceholder 
-                  ? 'Available'
-                  : user.isCurrentUser 
-                    ? 'You!' 
-                    : user.name,
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
-                color: isPlaceholder 
-                    ? Colors.grey.shade500
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 80),
+              child: Text(
+                isPlaceholder 
+                    ? 'Available'
                     : user.isCurrentUser 
-                      ? Colors.green.shade700 
-                      : Colors.black87,
+                      ? 'You!' 
+                      : user.name,
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                  color: isPlaceholder 
+                      ? Colors.grey.shade500
+                      : user.isCurrentUser 
+                        ? Colors.green.shade700 
+                        : Colors.black87,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
             ),
             Text(
               isPlaceholder ? '0 pts' : '${user.points} pts',
@@ -623,7 +655,12 @@ Widget _buildLeaderboardList() {
     }
     
     return Container(
-      margin: const EdgeInsets.fromLTRB(20, 10, 20, 10),
+      margin: EdgeInsets.fromLTRB(
+        MediaQuery.of(context).size.width * 0.05, 
+        10, 
+        MediaQuery.of(context).size.width * 0.05, 
+        10
+      ),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
@@ -720,11 +757,15 @@ Widget _buildLeaderboardRow(LeaderboardUser user) {
                 ),
                 Row(
                   children: [
-                    Text(
-                      '${user.points} points',
-                      style: TextStyle(
-                        color: Colors.grey.shade600,
-                        fontSize: 12,
+                    Flexible(
+                      child: Text(
+                        '${user.points} points',
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontSize: 12,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
                       ),
                     ),
                     if (user.streak > 0) ...[
@@ -772,18 +813,20 @@ Widget _buildLeaderboardRow(LeaderboardUser user) {
                 );
               },
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   color: Colors.orange.shade500,
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(15),
                 ),
                 child: const Text(
                   'Challenge',
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 12,
+                    fontSize: 11,
                     fontWeight: FontWeight.w600,
                   ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
               ),
             ),
@@ -796,7 +839,12 @@ Widget _buildUserRankSection() {
     if (_userRankInfo == null) return const SizedBox.shrink();
     
     return Container(
-      margin: const EdgeInsets.fromLTRB(20, 10, 20, 10),
+      margin: EdgeInsets.fromLTRB(
+        MediaQuery.of(context).size.width * 0.05, 
+        10, 
+        MediaQuery.of(context).size.width * 0.05, 
+        10
+      ),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.blue.shade50,
@@ -820,6 +868,9 @@ Widget _buildUserRankSection() {
               fontSize: 14,
               color: Colors.blue.shade600,
             ),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+            textAlign: TextAlign.center,
           ),
           Text(
             '${_userRankInfo!.currentUserScore} points',
@@ -827,6 +878,9 @@ Widget _buildUserRankSection() {
               fontSize: 14,
               color: Colors.blue.shade600,
             ),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+            textAlign: TextAlign.center,
           ),
         ],
       ),
@@ -835,7 +889,12 @@ Widget _buildUserRankSection() {
 
 Widget _buildConnectionBanner() {
     return Container(
-      margin: const EdgeInsets.fromLTRB(20, 5, 20, 5),
+      margin: EdgeInsets.fromLTRB(
+        MediaQuery.of(context).size.width * 0.05, 
+        5, 
+        MediaQuery.of(context).size.width * 0.05, 
+        5
+      ),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: Colors.orange.shade100,
@@ -874,7 +933,12 @@ Widget _buildConnectionBanner() {
 
 Widget _buildMotivationalCard() {
     return Container(
-      margin: const EdgeInsets.fromLTRB(20, 10, 20, 10),
+      margin: EdgeInsets.fromLTRB(
+        MediaQuery.of(context).size.width * 0.05, 
+        10, 
+        MediaQuery.of(context).size.width * 0.05, 
+        10
+      ),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.green.shade400,
@@ -904,25 +968,29 @@ Widget _buildMotivationalCard() {
             ),
           ),
           const SizedBox(width: 16),
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
+                const Text(
                   'Keep up the great work!',
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 18,
+                    fontSize: 16,
                     fontWeight: FontWeight.w600,
                   ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
-                SizedBox(height: 4),
+                const SizedBox(height: 4),
                 Text(
                   'Every problem solved makes you stronger! 💪',
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 14,
+                    fontSize: 13,
                   ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 2,
                 ),
               ],
             ),
