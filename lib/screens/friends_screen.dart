@@ -77,8 +77,6 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
     // Run comprehensive test
     final allTestsPassed = await _friendsService.testFriendsFunctionality();
     
-    // Get friends stats
-    final stats = await _friendsService.getFriendsStats();
     
     // Run debug cleanup to remove any stale requests
     print('FriendsScreen: Running debug cleanup...');
@@ -97,15 +95,6 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
       }
     } else {
       print('FriendsScreen: ✅ All friends functionality tests passed!');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('✅ Friends system ready! Friends: ${stats['friendsCount'] ?? 0}, Requests: ${stats['incomingRequestsCount'] ?? 0}'),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
     }
   }
 
