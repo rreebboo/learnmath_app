@@ -1,10 +1,4 @@
-plugins {
-  // ...
-
-  // Add the dependency for the Google services Gradle plugin
-  id("com.google.gms.google-services") apply false
-
-}
+// Plugin versions are managed in settings.gradle.kts
 allprojects {
     repositories {
         google()

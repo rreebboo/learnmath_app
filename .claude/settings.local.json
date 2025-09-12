@@ -3,7 +3,11 @@
     "allow": [
       "Bash(flutter:*)",
       "mcp__ide__getDiagnostics",
-      "Bash(firebase deploy:*)"
+      "Bash(firebase deploy:*)",
+      "Bash(firebase --version)",
+      "Bash(dart run:*)",
+      "Bash(firebase firestore:indexes:*)",
+      "Bash(git checkout:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

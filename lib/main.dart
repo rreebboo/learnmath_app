@@ -1,20 +1,19 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart';
 import 'screens/screens.dart';
 import 'services/auth_service.dart';
 import 'services/user_statistics_service.dart';
+import 'services/app_initialization_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-    // print('Firebase initialized successfully');
+    // Initialize Firebase and database
+    final appInitService = AppInitializationService();
+    await appInitService.initializeApp();
+    print('LearnMath app initialized successfully');
   } catch (e) {
-    // print('Firebase initialization error: $e');
+    print('App initialization error: $e');
   }
   
   runApp(const LearnMathApp());
@@ -45,6 +44,7 @@ class LearnMathApp extends StatelessWidget {
 class AuthWrapper extends StatelessWidget {
   final AuthService _authService = AuthService();
   final UserStatisticsService _userStatsService = UserStatisticsService();
+  final AppInitializationService _appInitService = AppInitializationService();
 
   AuthWrapper({super.key});
 
@@ -56,9 +56,19 @@ class AuthWrapper extends StatelessWidget {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const SplashScreen();
         } else if (snapshot.hasData) {
-          // User is signed in, load their data
+          // User is signed in, load their data and initialize user-specific features
           WidgetsBinding.instance.addPostFrameCallback((_) async {
-            await _userStatsService.loadStatistics();
+            try {
+              await _userStatsService.loadStatistics();
+              
+              // Initialize user-specific data including leaderboard positioning
+              final userId = _authService.getUserId();
+              if (userId != null) {
+                await _appInitService.initializeUserData(userId);
+              }
+            } catch (e) {
+              print('Error initializing user data: $e');
+            }
           });
           return const HomeScreen();
         } else {

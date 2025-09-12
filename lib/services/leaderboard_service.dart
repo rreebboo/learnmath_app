@@ -1,9 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firestore_service.dart';
+import 'database_service.dart';
 
 class LeaderboardService {
   final FirestoreService _firestoreService = FirestoreService();
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  // Use lazy initialization to avoid accessing Firebase before it's initialized
+  FirebaseFirestore get _firestore => FirebaseFirestore.instance;
+  final DatabaseService _databaseService = DatabaseService();
 
   // Getter to access the firestore service
   FirestoreService get firestoreService => _firestoreService;
@@ -270,6 +273,250 @@ class LeaderboardService {
       return getLeaderboardStream(period: 'all-time', limit: limit);
     }
   }
+
+  // Get cached leaderboard for better performance
+  Stream<List<LeaderboardUser>> getCachedLeaderboardStream({
+    String period = 'all-time',
+    int limit = 50,
+  }) {
+    try {
+      return _firestore.collection('leaderboards').doc(period).snapshots().map((snapshot) {
+        if (!snapshot.exists) {
+          // Fallback to live data if cache doesn't exist
+          return [];
+        }
+
+        final data = snapshot.data() as Map<String, dynamic>;
+        final usersData = List<Map<String, dynamic>>.from(data['users'] ?? []);
+        
+        List<LeaderboardUser> users = [];
+        int rank = 1;
+        
+        for (var userData in usersData.take(limit)) {
+          final user = LeaderboardUser(
+            id: userData['userId'] ?? '',
+            rank: rank++,
+            name: userData['name'] ?? 'User$rank',
+            avatar: userData['avatar'] ?? '🦊',
+            points: (userData['totalScore'] as num?)?.toInt() ?? 0,
+            streak: (userData['currentStreak'] as num?)?.toInt() ?? 0,
+            lessonsCompleted: (userData['lessonsCompleted'] as num?)?.toInt() ?? 0,
+            isCurrentUser: userData['userId'] == _firestoreService.currentUserId,
+            lastActive: (userData['lastActive'] as Timestamp?)?.toDate(),
+          );
+          users.add(user);
+        }
+        
+        return users;
+      });
+    } catch (e) {
+      // Return live leaderboard on error
+      return getLeaderboardStream(period: period, limit: limit);
+    }
+  }
+
+  // Update user's leaderboard position after score change
+  Future<void> updateUserLeaderboardPosition(String userId) async {
+    try {
+      // Update the cached leaderboard
+      await _databaseService.updateLeaderboardCache();
+      
+      // Check and award achievements
+      await _databaseService.checkAndAwardAchievements(userId);
+      
+      print('LeaderboardService: Updated leaderboard position for user $userId');
+    } catch (e) {
+      print('LeaderboardService: Error updating leaderboard position: $e');
+    }
+  }
+
+  // Get user's detailed stats for profile/leaderboard
+  Future<Map<String, dynamic>> getUserDetailedStats(String userId) async {
+    try {
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      if (!userDoc.exists) return {};
+
+      final userData = userDoc.data()!;
+      
+      // Get practice session count for this week
+      final weekAgo = DateTime.now().subtract(const Duration(days: 7));
+      final weeklySessions = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('practice_sessions')
+          .where('completedAt', isGreaterThanOrEqualTo: Timestamp.fromDate(weekAgo))
+          .get();
+
+      // Get monthly session count
+      final monthAgo = DateTime.now().subtract(const Duration(days: 30));
+      final monthlySessions = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('practice_sessions')
+          .where('completedAt', isGreaterThanOrEqualTo: Timestamp.fromDate(monthAgo))
+          .get();
+
+      return {
+        'totalScore': userData['totalScore'] ?? 0,
+        'lessonsCompleted': userData['lessonsCompleted'] ?? 0,
+        'currentStreak': userData['currentStreak'] ?? 0,
+        'bestStreak': userData['bestStreak'] ?? 0,
+        'accuracyRate': userData['accuracyRate'] ?? 0,
+        'totalTimeSpent': userData['totalTimeSpent'] ?? 0,
+        'friendsCount': userData['friendsCount'] ?? 0,
+        'achievementsCount': (userData['achievements'] as List?)?.length ?? 0,
+        'achievementPoints': userData['achievementPoints'] ?? 0,
+        'weeklySessionsCount': weeklySessions.docs.length,
+        'monthlySessionsCount': monthlySessions.docs.length,
+        'joinedDate': userData['createdAt'],
+        'lastActive': userData['lastLoginDate'],
+      };
+    } catch (e) {
+      print('LeaderboardService: Error getting detailed stats: $e');
+      return {};
+    }
+  }
+
+  // Get leaderboard stats (total users, user's position, etc.)
+  Future<LeaderboardStats> getLeaderboardStats() async {
+    try {
+      final totalUsersSnapshot = await _firestore.collection('users').get();
+      final totalUsers = totalUsersSnapshot.docs.length;
+      
+      final currentUserId = _firestoreService.currentUserId;
+      if (currentUserId == null) {
+        return LeaderboardStats(
+          totalUsers: totalUsers,
+          currentUserRank: 0,
+          activeUsersToday: 0,
+          activeUsersWeek: 0,
+        );
+      }
+
+      // Get current user's rank
+      final userRankInfo = await getCurrentUserRankInfo();
+      
+      // Get active users today
+      final todayStart = DateTime(
+        DateTime.now().year,
+        DateTime.now().month,
+        DateTime.now().day,
+      );
+      final activeToday = await _firestore
+          .collection('users')
+          .where('lastLoginDate', isGreaterThanOrEqualTo: Timestamp.fromDate(todayStart))
+          .get();
+
+      // Get active users this week
+      final weekAgo = DateTime.now().subtract(const Duration(days: 7));
+      final activeWeek = await _firestore
+          .collection('users')
+          .where('lastLoginDate', isGreaterThanOrEqualTo: Timestamp.fromDate(weekAgo))
+          .get();
+
+      return LeaderboardStats(
+        totalUsers: totalUsers,
+        currentUserRank: userRankInfo.currentUserRank,
+        activeUsersToday: activeToday.docs.length,
+        activeUsersWeek: activeWeek.docs.length,
+      );
+    } catch (e) {
+      print('LeaderboardService: Error getting leaderboard stats: $e');
+      return LeaderboardStats(
+        totalUsers: 0,
+        currentUserRank: 0,
+        activeUsersToday: 0,
+        activeUsersWeek: 0,
+      );
+    }
+  }
+
+  // Get top performers by different criteria
+  Future<Map<String, List<LeaderboardUser>>> getTopPerformers({int limit = 10}) async {
+    try {
+      Map<String, List<LeaderboardUser>> results = {};
+
+      // Top by score
+      final topByScore = await _firestore
+          .collection('users')
+          .orderBy('totalScore', descending: true)
+          .limit(limit)
+          .get();
+      
+      results['topScore'] = _convertToLeaderboardUsers(topByScore.docs);
+
+      // Top by streak
+      final topByStreak = await _firestore
+          .collection('users')
+          .orderBy('currentStreak', descending: true)
+          .limit(limit)
+          .get();
+      
+      results['topStreak'] = _convertToLeaderboardUsers(topByStreak.docs);
+
+      // Top by lessons completed
+      final topByLessons = await _firestore
+          .collection('users')
+          .orderBy('lessonsCompleted', descending: true)
+          .limit(limit)
+          .get();
+      
+      results['topLessons'] = _convertToLeaderboardUsers(topByLessons.docs);
+
+      // Top by accuracy
+      final topByAccuracy = await _firestore
+          .collection('users')
+          .orderBy('accuracyRate', descending: true)
+          .limit(limit)
+          .get();
+      
+      results['topAccuracy'] = _convertToLeaderboardUsers(topByAccuracy.docs);
+
+      return results;
+    } catch (e) {
+      print('LeaderboardService: Error getting top performers: $e');
+      return {};
+    }
+  }
+
+  // Helper method to convert Firestore docs to LeaderboardUser objects
+  List<LeaderboardUser> _convertToLeaderboardUsers(List<QueryDocumentSnapshot> docs) {
+    List<LeaderboardUser> users = [];
+    int rank = 1;
+    
+    for (var doc in docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final user = LeaderboardUser(
+        id: doc.id,
+        rank: rank++,
+        name: data['name'] ?? 'User$rank',
+        avatar: data['avatar'] ?? '🦊',
+        points: (data['totalScore'] as num?)?.toInt() ?? 0,
+        streak: (data['currentStreak'] as num?)?.toInt() ?? 0,
+        lessonsCompleted: (data['lessonsCompleted'] as num?)?.toInt() ?? 0,
+        isCurrentUser: doc.id == _firestoreService.currentUserId,
+        lastActive: (data['lastLoginDate'] as Timestamp?)?.toDate(),
+      );
+      users.add(user);
+    }
+    
+    return users;
+  }
+}
+
+// Additional model for leaderboard statistics
+class LeaderboardStats {
+  final int totalUsers;
+  final int currentUserRank;
+  final int activeUsersToday;
+  final int activeUsersWeek;
+
+  LeaderboardStats({
+    required this.totalUsers,
+    required this.currentUserRank,
+    required this.activeUsersToday,
+    required this.activeUsersWeek,
+  });
 }
 
 class LeaderboardUser {

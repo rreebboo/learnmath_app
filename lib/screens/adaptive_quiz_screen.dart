@@ -17,7 +17,10 @@ class _AdaptiveQuizScreenState extends State<AdaptiveQuizScreen>
   final QuizProgressService _progressService = QuizProgressService();
   late AnimationController _feedbackController;
   late AnimationController _difficultyController;
+  late AnimationController _questionController;
+  late AnimationController _progressController;
   late Animation<double> _feedbackAnimation;
+  late Animation<double> _progressScaleAnimation;
   late Animation<Color?> _backgroundAnimation;
   
   MathQuestion? _currentQuestion;
@@ -45,12 +48,31 @@ class _AdaptiveQuizScreenState extends State<AdaptiveQuizScreen>
       vsync: this,
     );
     
+    _questionController = AnimationController(
+      duration: const Duration(milliseconds: 500),
+      vsync: this,
+    );
+    
+    _progressController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+    
     _feedbackAnimation = Tween<double>(
       begin: 0.0,
       end: 1.0,
     ).animate(CurvedAnimation(
       parent: _feedbackController,
       curve: Curves.elasticOut,
+    ));
+    
+    
+    _progressScaleAnimation = Tween<double>(
+      begin: 1.0,
+      end: 1.1,
+    ).animate(CurvedAnimation(
+      parent: _progressController,
+      curve: Curves.easeInOut,
     ));
     
     _backgroundAnimation = ColorTween(
@@ -63,26 +85,43 @@ class _AdaptiveQuizScreenState extends State<AdaptiveQuizScreen>
   void dispose() {
     _feedbackController.dispose();
     _difficultyController.dispose();
+    _questionController.dispose();
+    _progressController.dispose();
     _feedbackTimer?.cancel();
     super.dispose();
   }
   
   void _generateNewQuestion() {
     try {
-      final newQuestion = _quizEngine.generateQuestion();
-      setState(() {
-        _currentQuestion = newQuestion;
-        _selectedAnswer = null;
-        _showFeedback = false;
+      _questionController.forward().then((_) {
+        final newQuestion = _quizEngine.generateQuestion();
+        setState(() {
+          _currentQuestion = newQuestion;
+          _selectedAnswer = null;
+          _showFeedback = false;
+        });
+        _questionController.reverse();
+      });
+      
+      _progressController.forward().then((_) {
+        _progressController.reverse();
       });
     } catch (e) {
       print('Error generating question: $e');
       // Handle error gracefully - could show error dialog or retry
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Error generating question. Please try again.'),
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.error_outline, color: Colors.white),
+                SizedBox(width: 8),
+                Text('Error generating question. Please try again.'),
+              ],
+            ),
             backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
         );
       }
@@ -148,35 +187,7 @@ class _AdaptiveQuizScreenState extends State<AdaptiveQuizScreen>
     });
   }
   
-  Color _getAnswerButtonColor(int option) {
-    if (!_showFeedback) {
-      return _selectedAnswer == option 
-          ? const Color(0xFF5B9EF3)
-          : Colors.white;
-    }
-    
-    if (option == _currentQuestion!.correctAnswer) {
-      return const Color(0xFF7ED321);
-    } else if (option == _selectedAnswer && !_isCorrect) {
-      return const Color(0xFFFF6B6B);
-    } else {
-      return Colors.grey[200]!;
-    }
-  }
   
-  Color _getAnswerTextColor(int option) {
-    if (!_showFeedback) {
-      return _selectedAnswer == option ? Colors.white : const Color(0xFF2C3E50);
-    }
-    
-    if (option == _currentQuestion!.correctAnswer) {
-      return Colors.white;
-    } else if (option == _selectedAnswer && !_isCorrect) {
-      return Colors.white;
-    } else {
-      return Colors.grey[600]!;
-    }
-  }
   
   String _getDifficultyDisplayName() {
     switch (_quizEngine.currentDifficulty) {
@@ -219,109 +230,124 @@ class _AdaptiveQuizScreenState extends State<AdaptiveQuizScreen>
       animation: _backgroundAnimation,
       builder: (context, child) {
         return Scaffold(
-          backgroundColor: _backgroundAnimation.value,
+          backgroundColor: _backgroundAnimation.value ?? const Color(0xFFF5F7FA),
           appBar: _buildAppBar(),
-          body: _currentQuestion == null 
-              ? const Center(child: CircularProgressIndicator())
-              : _buildBody(),
+          body: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  const Color(0xFFF5F7FA),
+                  const Color(0xFFEBF0F5),
+                  _getDifficultyColor().withValues(alpha: 0.05),
+                ],
+              ),
+            ),
+            child: _currentQuestion == null 
+                ? Center(
+                    child: Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: _getDifficultyColor().withValues(alpha: 0.3),
+                          width: 2,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.05),
+                            blurRadius: 15,
+                            offset: const Offset(0, 5),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(_getDifficultyColor()),
+                            strokeWidth: 3,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Preparing Quiz...',
+                            style: TextStyle(
+                              color: _getDifficultyColor(),
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : _buildBody(),
+          ),
         );
       },
     );
   }
   
   PreferredSizeWidget _buildAppBar() {
-    return PreferredSize(
-      preferredSize: const Size.fromHeight(56),
-      child: LayoutBuilder(
-      builder: (context, constraints) {
-        final screenWidth = MediaQuery.of(context).size.width;
-        final isSmallScreen = screenWidth < 360;
-        final isMediumScreen = screenWidth < 500;
-        
-        return AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back, color: Color(0xFF2C3E50)),
-            onPressed: () => _showQuitDialog(),
-          ),
-          title: Text(
+    return AppBar(
+      backgroundColor: Colors.white,
+      elevation: 0,
+      leading: IconButton(
+        icon: const Icon(Icons.close, color: Color(0xFF2C3E50)),
+        onPressed: () => _showQuitDialog(),
+      ),
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
             'Adaptive Quiz',
             style: TextStyle(
-              color: const Color(0xFF2C3E50),
-              fontSize: isSmallScreen ? 16 : 18,
-              fontWeight: FontWeight.bold,
+              color: Color(0xFF2C3E50),
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
             ),
           ),
-          actions: [
-            if (!isSmallScreen) ...[
-              Container(
-                margin: EdgeInsets.only(right: isMediumScreen ? 4 : 8),
-                padding: EdgeInsets.symmetric(
-                  horizontal: isMediumScreen ? 8 : 10, 
-                  vertical: 4
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF5B9EF3).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF5B9EF3), width: 1),
-                ),
-                child: Text(
-                  _getOperationDisplayName(),
-                  style: TextStyle(
-                    fontSize: isMediumScreen ? 10 : 11,
-                    fontWeight: FontWeight.bold,
-                    color: const Color(0xFF5B9EF3),
-                  ),
+          Text(
+            _getOperationDisplayName(),
+            style: TextStyle(
+              color: _getDifficultyColor(),
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        Container(
+          margin: const EdgeInsets.only(right: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: _getDifficultyColor().withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.speed,
+                color: _getDifficultyColor(),
+                size: 16,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                _getDifficultyDisplayName(),
+                style: TextStyle(
+                  color: _getDifficultyColor(),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
                 ),
               ),
             ],
-            Container(
-              margin: EdgeInsets.only(right: isMediumScreen ? 8 : 16),
-              padding: EdgeInsets.symmetric(
-                horizontal: isMediumScreen ? 8 : 10, 
-                vertical: 4
-              ),
-              decoration: BoxDecoration(
-                color: _getDifficultyColor().withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: _getDifficultyColor(), width: 1),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.speed,
-                    size: isMediumScreen ? 12 : 14,
-                    color: _getDifficultyColor(),
-                  ),
-                  SizedBox(width: isMediumScreen ? 2 : 4),
-                  Text(
-                    isSmallScreen ? _getDifficultyDisplayName().substring(0, 1) : _getDifficultyDisplayName(),
-                    style: TextStyle(
-                      fontSize: isMediumScreen ? 10 : 11,
-                      fontWeight: FontWeight.bold,
-                      color: _getDifficultyColor(),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (isSmallScreen)
-              PopupMenuButton<String>(
-                icon: const Icon(Icons.more_vert, color: Color(0xFF2C3E50)),
-                onSelected: (value) {},
-                itemBuilder: (context) => [
-                  PopupMenuItem(
-                    value: 'operation',
-                    child: Text(_getOperationDisplayName()),
-                  ),
-                ],
-              ),
-          ],
-        );
-      },
-      ),
+          ),
+        ),
+      ],
     );
   }
   
@@ -364,146 +390,265 @@ class _AdaptiveQuizScreenState extends State<AdaptiveQuizScreen>
   }
   
   Widget _buildStatsBar(Map<String, dynamic> stats) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final screenWidth = MediaQuery.of(context).size.width;
-        final isSmallScreen = screenWidth < 360;
-        final isMediumScreen = screenWidth < 500;
-        
-        if (isSmallScreen) {
-          return Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(15),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 10,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+    return AnimatedBuilder(
+      animation: _progressScaleAnimation,
+      builder: (context, child) {
+        return Transform.scale(
+          scale: _progressScaleAnimation.value,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final screenWidth = MediaQuery.of(context).size.width;
+              final isSmallScreen = screenWidth < 360;
+              final isMediumScreen = screenWidth < 500;
+              
+              if (isSmallScreen) {
+                return Column(
                   children: [
-                    _buildStatItem(
-                      icon: Icons.quiz,
-                      label: 'Total',
-                      value: '${stats['totalQuestions']}',
-                      color: const Color(0xFF5B9EF3),
-                      isCompact: true,
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.white,
+                            const Color(0xFFFAFBFC),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(15),
+                        border: Border.all(
+                          color: const Color(0xFF5B9EF3).withValues(alpha: 0.2),
+                          width: 1,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF5B9EF3).withValues(alpha: 0.1),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _buildStatItem(
+                            icon: Icons.quiz,
+                            label: 'Total',
+                            value: '${stats['totalQuestions']}',
+                            color: const Color(0xFF5B9EF3),
+                            isCompact: true,
+                          ),
+                          Container(
+                            width: 2,
+                            height: 25,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.grey[300]!,
+                                  Colors.grey[200]!,
+                                ],
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                              ),
+                              borderRadius: BorderRadius.circular(1),
+                            ),
+                          ),
+                          _buildStatItem(
+                            icon: Icons.check_circle,
+                            label: 'Correct',
+                            value: '${stats['correctAnswers']}',
+                            color: const Color(0xFF7ED321),
+                            isCompact: true,
+                          ),
+                        ],
+                      ),
                     ),
-                    Container(width: 1, height: 25, color: Colors.grey[300]),
-                    _buildStatItem(
-                      icon: Icons.check_circle,
-                      label: 'Correct',
-                      value: '${stats['correctAnswers']}',
-                      color: const Color(0xFF7ED321),
-                      isCompact: true,
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.white,
+                            const Color(0xFFFAFBFC),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(15),
+                        border: Border.all(
+                          color: const Color(0xFF9B59B6).withValues(alpha: 0.2),
+                          width: 1,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF9B59B6).withValues(alpha: 0.1),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _buildStatItem(
+                            icon: Icons.trending_up,
+                            label: 'Progress',
+                            value: '${stats['correctAnswersInCurrentLevel']}/10',
+                            color: const Color(0xFF9B59B6),
+                            isCompact: true,
+                          ),
+                          Container(
+                            width: 2,
+                            height: 25,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.grey[300]!,
+                                  Colors.grey[200]!,
+                                ],
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                              ),
+                              borderRadius: BorderRadius.circular(1),
+                            ),
+                          ),
+                          _buildStatItem(
+                            icon: Icons.local_fire_department,
+                            label: 'Streak',
+                            value: '${stats['currentStreak']}',
+                            color: const Color(0xFFFFA500),
+                            isCompact: true,
+                          ),
+                        ],
+                      ),
                     ),
                   ],
-                ),
-              ),
-              const SizedBox(height: 10),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(15),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 10,
-                      offset: const Offset(0, 3),
+                );
+              } else {
+                return Container(
+                  padding: EdgeInsets.all(isMediumScreen ? 12 : 16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.white,
+                        const Color(0xFFFAFBFC),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _buildStatItem(
-                      icon: Icons.trending_up,
-                      label: 'Progress',
-                      value: '${stats['correctAnswersInCurrentLevel']}/10',
-                      color: const Color(0xFF9B59B6),
-                      isCompact: true,
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(
+                      color: _getDifficultyColor().withValues(alpha: 0.3),
+                      width: 1.5,
                     ),
-                    Container(width: 1, height: 25, color: Colors.grey[300]),
-                    _buildStatItem(
-                      icon: Icons.local_fire_department,
-                      label: 'Streak',
-                      value: '${stats['currentStreak']}',
-                      color: const Color(0xFFFFA500),
-                      isCompact: true,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          );
-        } else {
-          return Container(
-            padding: EdgeInsets.all(isMediumScreen ? 12 : 16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(15),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, 3),
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                Flexible(
-                  child: _buildStatItem(
-                    icon: Icons.quiz,
-                    label: isMediumScreen ? 'Total' : 'Questions',
-                    value: '${stats['totalQuestions']}',
-                    color: const Color(0xFF5B9EF3),
-                    isCompact: isMediumScreen,
+                    boxShadow: [
+                      BoxShadow(
+                        color: _getDifficultyColor().withValues(alpha: 0.15),
+                        blurRadius: 15,
+                        offset: const Offset(0, 5),
+                        spreadRadius: 2,
+                      ),
+                      BoxShadow(
+                        color: Colors.white,
+                        blurRadius: 8,
+                        offset: const Offset(-2, -2),
+                      ),
+                    ],
                   ),
-                ),
-                Container(width: 1, height: isMediumScreen ? 25 : 30, color: Colors.grey[300]),
-                Flexible(
-                  child: _buildStatItem(
-                    icon: Icons.check_circle,
-                    label: 'Correct',
-                    value: '${stats['correctAnswers']}',
-                    color: const Color(0xFF7ED321),
-                    isCompact: isMediumScreen,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      Flexible(
+                        child: _buildStatItem(
+                          icon: Icons.quiz,
+                          label: isMediumScreen ? 'Total' : 'Questions',
+                          value: '${stats['totalQuestions']}',
+                          color: const Color(0xFF5B9EF3),
+                          isCompact: isMediumScreen,
+                        ),
+                      ),
+                      Container(
+                        width: 2,
+                        height: isMediumScreen ? 25 : 30,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.grey[300]!,
+                              Colors.grey[200]!,
+                            ],
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                          ),
+                          borderRadius: BorderRadius.circular(1),
+                        ),
+                      ),
+                      Flexible(
+                        child: _buildStatItem(
+                          icon: Icons.check_circle,
+                          label: 'Correct',
+                          value: '${stats['correctAnswers']}',
+                          color: const Color(0xFF7ED321),
+                          isCompact: isMediumScreen,
+                        ),
+                      ),
+                      Container(
+                        width: 2,
+                        height: isMediumScreen ? 25 : 30,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.grey[300]!,
+                              Colors.grey[200]!,
+                            ],
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                          ),
+                          borderRadius: BorderRadius.circular(1),
+                        ),
+                      ),
+                      Flexible(
+                        child: _buildStatItem(
+                          icon: Icons.trending_up,
+                          label: isMediumScreen ? 'Progress' : 'Level Progress',
+                          value: '${stats['correctAnswersInCurrentLevel']}/10',
+                          color: const Color(0xFF9B59B6),
+                          isCompact: isMediumScreen,
+                        ),
+                      ),
+                      Container(
+                        width: 2,
+                        height: isMediumScreen ? 25 : 30,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.grey[300]!,
+                              Colors.grey[200]!,
+                            ],
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                          ),
+                          borderRadius: BorderRadius.circular(1),
+                        ),
+                      ),
+                      Flexible(
+                        child: _buildStatItem(
+                          icon: Icons.local_fire_department,
+                          label: 'Streak',
+                          value: '${stats['currentStreak']}',
+                          color: const Color(0xFFFFA500),
+                          isCompact: isMediumScreen,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                Container(width: 1, height: isMediumScreen ? 25 : 30, color: Colors.grey[300]),
-                Flexible(
-                  child: _buildStatItem(
-                    icon: Icons.trending_up,
-                    label: isMediumScreen ? 'Progress' : 'Level Progress',
-                    value: '${stats['correctAnswersInCurrentLevel']}/10',
-                    color: const Color(0xFF9B59B6),
-                    isCompact: isMediumScreen,
-                  ),
-                ),
-                Container(width: 1, height: isMediumScreen ? 25 : 30, color: Colors.grey[300]),
-                Flexible(
-                  child: _buildStatItem(
-                    icon: Icons.local_fire_department,
-                    label: 'Streak',
-                    value: '${stats['currentStreak']}',
-                    color: const Color(0xFFFFA500),
-                    isCompact: isMediumScreen,
-                  ),
-                ),
-              ],
-            ),
-          );
-        }
+                );
+              }
+            },
+          ),
+        );
       },
     );
   }
@@ -515,33 +660,65 @@ class _AdaptiveQuizScreenState extends State<AdaptiveQuizScreen>
     required Color color,
     bool isCompact = false,
   }) {
-    return Column(
-      children: [
-        Icon(
-          icon, 
-          color: color, 
-          size: isCompact ? 16 : 20,
-        ),
-        SizedBox(height: isCompact ? 2 : 4),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: isCompact ? 14 : 16,
-            fontWeight: FontWeight.bold,
-            color: color,
+    return TweenAnimationBuilder<double>(
+      duration: const Duration(milliseconds: 600),
+      tween: Tween(begin: 0.0, end: 1.0),
+      curve: Curves.elasticOut,
+      builder: (context, animValue, child) {
+        return Transform.scale(
+          scale: animValue,
+          child: Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: isCompact ? 8 : 12,
+              vertical: isCompact ? 6 : 8,
+            ),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: color.withValues(alpha: 0.2),
+                width: 1,
+              ),
+            ),
+            child: Column(
+              children: [
+                Container(
+                  padding: EdgeInsets.all(isCompact ? 4 : 6),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Icon(
+                    icon, 
+                    color: color, 
+                    size: isCompact ? 16 : 20,
+                  ),
+                ),
+                SizedBox(height: isCompact ? 4 : 6),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: isCompact ? 14 : 16,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                ),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: isCompact ? 8 : 10,
+                    color: color.withValues(alpha: 0.7),
+                    fontWeight: FontWeight.w500,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
           ),
-        ),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: isCompact ? 8 : 10,
-            color: Colors.grey[600],
-          ),
-          textAlign: TextAlign.center,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-      ],
+        );
+      },
     );
   }
   
@@ -551,100 +728,73 @@ class _AdaptiveQuizScreenState extends State<AdaptiveQuizScreen>
         final screenWidth = MediaQuery.of(context).size.width;
         final screenHeight = MediaQuery.of(context).size.height;
         final isSmallScreen = screenWidth < 360;
-        final isMediumScreen = screenWidth < 500;
-        final isShortScreen = screenHeight < 600;
         
         return Container(
           width: double.infinity,
-          padding: EdgeInsets.all(
-            isSmallScreen ? 16 : isMediumScreen ? 20 : 24
-          ),
+          margin: const EdgeInsets.symmetric(horizontal: 8),
+          padding: EdgeInsets.all(isSmallScreen ? 20 : 24),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(isSmallScreen ? 15 : 20),
+            borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.1),
-                blurRadius: isSmallScreen ? 15 : 20,
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 15,
                 offset: const Offset(0, 5),
               ),
             ],
           ),
           child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              if (!isSmallScreen)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Flexible(
-                      child: Text(
-                        'Solve this problem:',
-                        style: TextStyle(
-                          fontSize: isMediumScreen ? 12 : 14,
-                          color: Colors.grey[600],
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                    Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: isMediumScreen ? 6 : 8, 
-                        vertical: 4
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF9B59B6).withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: const Color(0xFF9B59B6), width: 1),
-                      ),
-                      child: Text(
-                        isMediumScreen ? 'Perfect Score' : 'Perfect Score Required',
-                        style: TextStyle(
-                          fontSize: isMediumScreen ? 8 : 10,
-                          fontWeight: FontWeight.bold,
-                          color: const Color(0xFF9B59B6),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              if (isSmallScreen) ...[
-                Text(
-                  'Solve this problem:',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                    fontWeight: FontWeight.w500,
+              // Header
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.psychology,
+                    color: _getDifficultyColor(),
+                    size: 20,
                   ),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF9B59B6).withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFF9B59B6), width: 1),
-                  ),
-                  child: const Text(
-                    'Perfect Score Required',
+                  const SizedBox(width: 8),
+                  Text(
+                    'Solve this problem:',
                     style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF9B59B6),
+                      fontSize: 16,
+                      color: _getDifficultyColor(),
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                ),
-              ],
-              SizedBox(height: isSmallScreen ? 12 : isShortScreen ? 15 : 20),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  _currentQuestion!.questionText,
-                  style: TextStyle(
-                    fontSize: _getQuestionFontSize(screenWidth, screenHeight),
-                    fontWeight: FontWeight.bold,
-                    color: const Color(0xFF2C3E50),
+                ],
+              ),
+              
+              const SizedBox(height: 30),
+              
+              // Question Text - Completely Centered
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF5F7FA),
+                  borderRadius: BorderRadius.circular(15),
+                  border: Border.all(
+                    color: _getDifficultyColor().withValues(alpha: 0.2),
+                    width: 2,
                   ),
-                  textAlign: TextAlign.center,
+                ),
+                child: Center(
+                  child: Text(
+                    _currentQuestion!.questionText,
+                    style: TextStyle(
+                      fontSize: _getQuestionFontSize(screenWidth, screenHeight),
+                      fontWeight: FontWeight.bold,
+                      color: _getDifficultyColor(),
+                      letterSpacing: 1.5,
+                      height: 1.3,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
                 ),
               ),
             ],
@@ -665,111 +815,91 @@ class _AdaptiveQuizScreenState extends State<AdaptiveQuizScreen>
   }
   
   Widget _buildAnswerOptions() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final screenWidth = MediaQuery.of(context).size.width;
-        final screenHeight = MediaQuery.of(context).size.height;
-        final isSmallScreen = screenWidth < 360;
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 15,
+        mainAxisSpacing: 15,
+        childAspectRatio: 2.0,
+      ),
+      itemCount: _currentQuestion!.options.length,
+      itemBuilder: (context, index) {
+        final option = _currentQuestion!.options[index];
+        final isCorrect = option == _currentQuestion!.correctAnswer;
+        final isSelected = _selectedAnswer == option;
         
-        // For very small screens, use grid layout
-        if (isSmallScreen && screenHeight < 650) {
-          return GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              childAspectRatio: 2.5,
-              crossAxisSpacing: 8,
-              mainAxisSpacing: 8,
-            ),
-            itemCount: _currentQuestion!.options.length,
-            itemBuilder: (context, index) {
-              final option = _currentQuestion!.options[index];
-              return ElevatedButton(
-                onPressed: () => _selectAnswer(option),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _getAnswerButtonColor(option),
-                  foregroundColor: _getAnswerTextColor(option),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  elevation: _showFeedback ? 0 : 2,
-                ),
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    '$option',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              );
-            },
-          );
+        Color backgroundColor = Colors.white;
+        Color textColor = const Color(0xFF2C3E50);
+        
+        if (_showFeedback) {
+          if (isCorrect) {
+            backgroundColor = Colors.green;
+            textColor = Colors.white;
+          } else if (isSelected && !isCorrect) {
+            backgroundColor = Colors.red;
+            textColor = Colors.white;
+          }
         }
         
-        // For regular screens, use column layout
-        return Column(
-          children: _currentQuestion!.options.map((option) {
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: isSmallScreen ? 8 : (screenHeight < 700) ? 10 : 12
+        return GestureDetector(
+          onTap: _showFeedback ? null : () => _selectAnswer(option),
+          child: Container(
+            decoration: BoxDecoration(
+              color: backgroundColor,
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(
+                color: _showFeedback && isCorrect
+                    ? Colors.green
+                    : _showFeedback && isSelected
+                        ? Colors.red
+                        : Colors.grey[300]!,
+                width: 2,
               ),
-              child: SizedBox(
-                width: double.infinity,
-                height: _getButtonHeight(screenWidth, screenHeight),
-                child: ElevatedButton(
-                  onPressed: () => _selectAnswer(option),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _getAnswerButtonColor(option),
-                    foregroundColor: _getAnswerTextColor(option),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(
-                        isSmallScreen ? 12 : 15
-                      ),
-                    ),
-                    elevation: _showFeedback ? 0 : 2,
-                  ),
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      '$option',
-                      style: TextStyle(
-                        fontSize: _getAnswerFontSize(screenWidth, screenHeight),
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
                 ),
+              ],
+            ),
+            child: Center(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (_showFeedback && isCorrect)
+                    const Icon(
+                      Icons.check_circle,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  if (_showFeedback && isSelected && !isCorrect)
+                    const Icon(
+                      Icons.cancel,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  if (_showFeedback && (isCorrect || isSelected))
+                    const SizedBox(width: 8),
+                  Text(
+                    option.toString(),
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: textColor,
+                    ),
+                  ),
+                ],
               ),
-            );
-          }).toList(),
+            ),
+          ),
         );
       },
     );
   }
   
-  double _getButtonHeight(double screenWidth, double screenHeight) {
-    if (screenWidth < 360 || screenHeight < 600) {
-      return 45; // Small screens
-    } else if (screenWidth < 500 || screenHeight < 700) {
-      return 52; // Medium screens
-    } else {
-      return 60; // Large screens
-    }
-  }
-  
-  double _getAnswerFontSize(double screenWidth, double screenHeight) {
-    if (screenWidth < 360 || screenHeight < 600) {
-      return 16; // Small screens
-    } else if (screenWidth < 500 || screenHeight < 700) {
-      return 18; // Medium screens
-    } else {
-      return 20; // Large screens
-    }
-  }
   
   Widget _buildFeedback() {
     return AnimatedBuilder(

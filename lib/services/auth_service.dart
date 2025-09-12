@@ -4,8 +4,9 @@ import 'user_statistics_service.dart';
 import 'user_preferences_service.dart';
 
 class AuthService {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  // Use lazy initialization to avoid accessing Firebase before it's initialized
+  FirebaseAuth get _auth => FirebaseAuth.instance;
+  FirebaseFirestore get _firestore => FirebaseFirestore.instance;
 
   // Get current user
   User? get currentUser => _auth.currentUser;

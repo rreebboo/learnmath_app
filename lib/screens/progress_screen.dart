@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../services/user_statistics_service.dart';
 import '../services/firestore_service.dart';
+import 'achievements_screen.dart';
+import 'leaderboard_screen.dart';
 
 class ProgressScreen extends StatefulWidget {
   const ProgressScreen({super.key});
@@ -557,16 +559,34 @@ class _ProgressScreenState extends State<ProgressScreen> with TickerProviderStat
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Icon(Icons.emoji_events, color: Colors.amber, size: 18),
-              SizedBox(width: 8),
-              Text(
-                'Recent Achievements',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF2C3E50),
+              const Row(
+                children: [
+                  Icon(Icons.emoji_events, color: Colors.amber, size: 18),
+                  SizedBox(width: 8),
+                  Text(
+                    'Achievements & Rankings',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF2C3E50),
+                    ),
+                  ),
+                ],
+              ),
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const AchievementsScreen()),
+                  );
+                },
+                child: const Icon(
+                  Icons.arrow_forward_ios,
+                  size: 16,
+                  color: Colors.grey,
                 ),
               ),
             ],
@@ -574,17 +594,37 @@ class _ProgressScreenState extends State<ProgressScreen> with TickerProviderStat
           const SizedBox(height: 16),
           Row(
             children: [
+              Expanded(child: _buildNavigationCard(
+                'Achievements',
+                '${_userData?['achievements']?.length ?? 0} unlocked',
+                Colors.amber,
+                Icons.emoji_events,
+                () => Navigator.push(context, MaterialPageRoute(builder: (context) => const AchievementsScreen())),
+              )),
+              const SizedBox(width: 12),
+              Expanded(child: _buildNavigationCard(
+                'Leaderboard',
+                'Rank #${_userData?['rank'] ?? '?'}',
+                const Color(0xFF6366F1),
+                Icons.leaderboard,
+                () => Navigator.push(context, MaterialPageRoute(builder: (context) => const LeaderboardScreen())),
+              )),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
               Expanded(child: _buildAchievementCard(
                 'Math Master!',
                 '${_statsService.totalSessions} sessions completed',
-                Colors.amber,
+                const Color(0xFF7ED321),
                 Icons.star,
               )),
               const SizedBox(width: 12),
               Expanded(child: _buildAchievementCard(
-                'Perfect Week!',
+                'Streak Champion!',
                 '${_statsService.currentStreak} days streak',
-                const Color(0xFF7ED321),
+                Colors.orange,
                 Icons.local_fire_department,
               )),
             ],
@@ -639,6 +679,71 @@ class _ProgressScreenState extends State<ProgressScreen> with TickerProviderStat
             overflow: TextOverflow.ellipsis,
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildNavigationCard(String title, String subtitle, Color color, IconData icon, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [color.withValues(alpha: 0.1), Colors.white],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+          boxShadow: [
+            BoxShadow(
+              color: color.withValues(alpha: 0.1),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: Colors.white, size: 20),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF2C3E50),
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: const TextStyle(
+                fontSize: 11,
+                color: Colors.grey,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 4),
+            Icon(
+              Icons.arrow_forward_ios,
+              size: 12,
+              color: color,
+            ),
+          ],
+        ),
       ),
     );
   }

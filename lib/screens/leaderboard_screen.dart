@@ -234,11 +234,11 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           ),
         ],
       ),
-      body: Stack(
+      body: Column(
         children: [
-          // Background gradient
+          // Fixed top section with background gradient
           Container(
-            height: MediaQuery.of(context).size.height * 0.35,
+            height: MediaQuery.of(context).size.height * 0.15,
             decoration: const BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
@@ -249,14 +249,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                 ],
               ),
             ),
-          ),
-          
-          RefreshIndicator(
-            onRefresh: () async {
-              _loadLeaderboardData();
-            },
-            child: ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
+            child: Column(
               children: [
                 // Keep learning text
                 Padding(
@@ -289,7 +282,21 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                     ),
                   ),
                 ),
-                
+              ],
+            ),
+          ),
+          
+          // Scrollable content
+          Expanded(
+            child: Container(
+              color: const Color(0xFFF5F7FA),
+              child: RefreshIndicator(
+                onRefresh: () async {
+                  _loadLeaderboardData();
+                },
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  children: [
                 const SizedBox(height: 16),
                 
                 // Grade selection
@@ -331,6 +338,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                 
                 const SizedBox(height: 100),
               ],
+                ),
+              ),
             ),
           ),
         ],

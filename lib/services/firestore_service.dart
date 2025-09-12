@@ -1,10 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/math_topic.dart';
+import 'database_service.dart';
 
 class FirestoreService {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  // Use lazy initialization to avoid accessing Firebase before it's initialized
+  FirebaseFirestore get _firestore => FirebaseFirestore.instance;
+  FirebaseAuth get _auth => FirebaseAuth.instance;
+  final DatabaseService _databaseService = DatabaseService();
 
   // Get current user ID
   String? get currentUserId => _auth.currentUser?.uid;
@@ -164,7 +167,7 @@ class FirestoreService {
     }
   }
 
-  // Save practice session result
+  // Save practice session result with enhanced leaderboard integration
   Future<void> savePracticeSession({
     required String userId,
     required String topic,
@@ -172,30 +175,23 @@ class FirestoreService {
     required int totalQuestions,
     required int correctAnswers,
     required Duration timeSpent,
+    String difficulty = 'beginner',
   }) async {
     try {
-      // Save to practice_sessions subcollection
-      await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('practice_sessions')
-          .add({
-        'topic': topic,
-        'score': score,
-        'totalQuestions': totalQuestions,
-        'correctAnswers': correctAnswers,
-        'accuracy': (correctAnswers / totalQuestions * 100).round(),
-        'timeSpent': timeSpent.inSeconds,
-        'completedAt': FieldValue.serverTimestamp(),
-      });
+      // Use enhanced database service for better leaderboard integration
+      await _databaseService.savePracticeSessionWithLeaderboardUpdate(
+        userId: userId,
+        topic: topic,
+        score: score,
+        totalQuestions: totalQuestions,
+        correctAnswers: correctAnswers,
+        timeSpent: timeSpent,
+        difficulty: difficulty,
+      );
 
-      // Update user's total score
-      await updateUserScore(userId: userId, scoreToAdd: score);
-
-      // If score is perfect, increment lessons completed
-      if (correctAnswers == totalQuestions) {
-        await incrementLessonsCompleted(userId);
-      }
+      // Check for achievements and update leaderboard position
+      await _databaseService.checkAndAwardAchievements(userId);
+      
     } catch (e) {
       throw 'Error saving practice session: $e';
     }
