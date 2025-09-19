@@ -35,15 +35,13 @@ class UserAvatar extends StatelessWidget {
             ? null
             : (gradientColors != null
                 ? LinearGradient(colors: gradientColors!)
-                : const LinearGradient(
-                    colors: [Color(0xFF7ED321), Color(0xFF9ACD32)],
-                  )),
+                : null),
         color: isImageUrl
             ? (backgroundColor ?? Colors.white)
-            : null,
+            : (backgroundColor ?? Colors.white),
         border: showBorder
             ? Border.all(
-                color: borderColor ?? const Color(0xFF7ED321),
+                color: borderColor ?? const Color(0xFFE5E7EB),
                 width: borderWidth ?? 2,
               )
             : null,
@@ -51,7 +49,7 @@ class UserAvatar extends StatelessWidget {
             ? null
             : [
                 BoxShadow(
-                  color: (borderColor ?? const Color(0xFF7ED321)).withValues(alpha: 0.3),
+                  color: (borderColor ?? const Color(0xFFE5E7EB)).withValues(alpha: 0.3),
                   blurRadius: 10,
                   offset: const Offset(0, 5),
                 ),
@@ -77,9 +75,8 @@ class UserAvatar extends StatelessWidget {
                         shape: BoxShape.circle,
                         gradient: gradientColors != null
                             ? LinearGradient(colors: gradientColors!)
-                            : const LinearGradient(
-                                colors: [Color(0xFF7ED321), Color(0xFF9ACD32)],
-                              ),
+                            : null,
+                        color: backgroundColor ?? Colors.white,
                       ),
                       child: Center(
                         child: SizedBox(
@@ -87,7 +84,7 @@ class UserAvatar extends StatelessWidget {
                           height: size * 0.3,
                           child: const CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4169E1)),
                           ),
                         ),
                       ),
@@ -101,15 +98,14 @@ class UserAvatar extends StatelessWidget {
                         shape: BoxShape.circle,
                         gradient: gradientColors != null
                             ? LinearGradient(colors: gradientColors!)
-                            : const LinearGradient(
-                                colors: [Color(0xFF7ED321), Color(0xFF9ACD32)],
-                              ),
+                            : null,
+                        color: backgroundColor ?? Colors.white,
                       ),
                       child: Center(
                         child: Icon(
                           Icons.person,
                           size: size * 0.5,
-                          color: Colors.white,
+                          color: const Color(0xFF6B7280),
                         ),
                       ),
                     );

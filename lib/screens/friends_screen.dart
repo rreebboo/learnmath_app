@@ -452,7 +452,9 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
                   UserAvatar(
                     avatar: friend['avatar'] ?? '🦊',
                     size: isSmallScreen ? 40 : 50,
-                    gradientColors: const [Color(0xFF7ED321), Color(0xFF9ACD32)],
+                    backgroundColor: Colors.white,
+                    showBorder: true,
+                    borderColor: const Color(0xFFE5E7EB),
                   ),
                   if (friend['isOnline'] == true)
                     Positioned(
@@ -619,7 +621,9 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
                   UserAvatar(
                     avatar: request['avatar'] ?? '🦊',
                     size: isSmallScreen ? 40 : 50,
-                    gradientColors: const [Color(0xFF7ED321), Color(0xFF9ACD32)],
+                    backgroundColor: Colors.white,
+                    showBorder: true,
+                    borderColor: const Color(0xFFE5E7EB),
                   ),
                   SizedBox(width: isSmallScreen ? 10 : 15),
 
@@ -755,7 +759,9 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
               UserAvatar(
                 avatar: user['avatar'] ?? '🦊',
                 size: isSmallScreen ? 40 : 50,
-                gradientColors: const [Color(0xFF7ED321), Color(0xFF9ACD32)],
+                backgroundColor: Colors.white,
+                showBorder: true,
+                borderColor: const Color(0xFFE5E7EB),
               ),
               SizedBox(width: isSmallScreen ? 10 : 15),
 

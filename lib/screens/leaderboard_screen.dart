@@ -205,35 +205,21 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: Row(
+        title: const Row(
           mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text(
-              '👑 ',
-              style: TextStyle(fontSize: 20),
-            ),
-            const Text(
-              'Math Champions',
+            Text(
+              '👑 Math Champions 👑',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
               ),
             ),
-            const Text(
-              ' 👑',
-              style: TextStyle(fontSize: 20),
-            ),
           ],
         ),
         centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.leaderboard, color: Colors.white),
-            onPressed: () {},
-          ),
-        ],
       ),
       body: Column(
         children: [
@@ -421,7 +407,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   Widget _buildPodiumSection() {
     final top3 = _leaderboardData.take(3).toList();
     if (top3.isEmpty) return const SizedBox.shrink();
-    
+
     while (top3.length < 3) {
       top3.add(LeaderboardUser(
         id: 'placeholder_${top3.length}',
@@ -434,21 +420,45 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
         isCurrentUser: false,
       ));
     }
-    
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 40),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        mainAxisAlignment: MainAxisAlignment.center,
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
         children: [
-          // Second place
-          _buildPodiumPlace(top3[1], 2, 80, const Color(0xFFE5E5EA)),
-          const SizedBox(width: 8),
-          // First place
-          _buildPodiumPlace(top3[0], 1, 100, const Color(0xFFFFD700)),
-          const SizedBox(width: 8),
-          // Third place
-          _buildPodiumPlace(top3[2], 3, 60, const Color(0xFFFF9500)),
+          const Text(
+            '🏆 Top Champions 🏆',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF2C3E50),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              // Second place
+              _buildPodiumPlace(top3[1], 2, 85, const Color(0xFFC0C0C0)),
+              const SizedBox(width: 8),
+              // First place
+              _buildPodiumPlace(top3[0], 1, 110, const Color(0xFFFFD700)),
+              const SizedBox(width: 8),
+              // Third place
+              _buildPodiumPlace(top3[2], 3, 65, const Color(0xFFCD7F32)),
+            ],
+          ),
         ],
       ),
     );
@@ -457,135 +467,238 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   Widget _buildPodiumPlace(LeaderboardUser user, int position, double height, Color color) {
     String medal = position == 1 ? '👑' : (position == 2 ? '🥈' : '🥉');
     bool isPlaceholder = user.name == 'Empty';
-    
-    return Column(
-      children: [
-        Text(
-          medal,
-          style: const TextStyle(fontSize: 24),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          width: 60,
-          height: 60,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 3),
-            color: Colors.white,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.1),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Center(
-            child: isPlaceholder
-                ? Icon(Icons.person_outline, color: Colors.grey.shade400)
-                : UserAvatar(
-                    avatar: user.avatar,
-                    size: 56,
-                    gradientColors: const [Color(0xFF7ED321), Color(0xFF9ACD32)],
-                  ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          width: 80,
-          height: height,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(8),
-              topRight: Radius.circular(8),
+
+    return Expanded(
+      child: Column(
+        children: [
+          // Medal emoji
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: color.withValues(alpha: 0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Text(
+              medal,
+              style: const TextStyle(fontSize: 24),
             ),
           ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                isPlaceholder ? '' : user.name,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 12,
-                  color: Colors.black87,
+          const SizedBox(height: 12),
+
+          // User avatar
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white, width: 4),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.15),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              Text(
-                '${user.points} pts',
-                style: TextStyle(
-                  color: Colors.grey.shade700,
-                  fontSize: 11,
-                ),
-              ),
-            ],
+              ],
+            ),
+            child: isPlaceholder
+                ? Container(
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.person_outline, color: Colors.grey.shade400, size: 32),
+                  )
+                : UserAvatar(
+                    avatar: user.avatar,
+                    size: 60,
+                    backgroundColor: Colors.white,
+                    showBorder: false,
+                  ),
           ),
-        ),
-      ],
+          const SizedBox(height: 12),
+
+          // Podium bar
+          Container(
+            width: 90,
+            height: height,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  color,
+                  color.withValues(alpha: 0.8),
+                ],
+              ),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(12),
+                topRight: Radius.circular(12),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: color.withValues(alpha: 0.4),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (!isPlaceholder) ...[
+                  Text(
+                    user.name,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                      color: Colors.white,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '${user.points}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildLeaderboardCard() {
     final displayList = _leaderboardData.skip(3).take(7).toList();
-    
+
+    if (displayList.isEmpty) return const SizedBox.shrink();
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
-      padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Column(
-        children: displayList.map((user) => _buildLeaderboardItem(user)).toList(),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: const BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: Color(0xFFF0F0F0),
+                  width: 1,
+                ),
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.leaderboard,
+                  color: Color(0xFF5B9EF7),
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  'Rankings',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF2C3E50),
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  '${displayList.length} players',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF6B7280),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          ...displayList.map((user) => _buildLeaderboardItem(user)),
+          const SizedBox(height: 8),
+        ],
       ),
     );
   }
 
   Widget _buildLeaderboardItem(LeaderboardUser user) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: user.isCurrentUser ? const Color(0xFFE3F2FD) : Colors.transparent,
+        color: user.isCurrentUser ? const Color(0xFFF0F8FF) : const Color(0xFFFAFAFA),
+        borderRadius: BorderRadius.circular(12),
+        border: user.isCurrentUser ? Border.all(
+          color: const Color(0xFF5B9EF7).withValues(alpha: 0.3),
+          width: 1.5,
+        ) : null,
       ),
       child: Row(
         children: [
-          // Rank
+          // Rank badge
           Container(
-            width: 28,
-            alignment: Alignment.center,
-            child: Text(
-              '${user.rank}',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: user.isCurrentUser ? const Color(0xFF5B9EF7) : Colors.grey.shade700,
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: user.isCurrentUser ? const Color(0xFF5B9EF7) : const Color(0xFF6B7280),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Center(
+              child: Text(
+                '${user.rank}',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
               ),
             ),
           ),
           const SizedBox(width: 12),
-          
+
           // Avatar
           UserAvatar(
             avatar: user.avatar,
-            size: 48,
-            backgroundColor: const Color(0xFFFFF3DC),
+            size: 44,
+            backgroundColor: Colors.white,
             showBorder: true,
-            borderColor: user.isCurrentUser ? const Color(0xFF5B9EF7) : const Color(0xFFFFD700),
+            borderColor: user.isCurrentUser ? const Color(0xFF5B9EF7) : const Color(0xFFE5E7EB),
             borderWidth: 2,
-            gradientColors: const [Color(0xFF7ED321), Color(0xFF9ACD32)],
           ),
           const SizedBox(width: 12),
-          
+
           // Name and points
           Expanded(
             child: Column(
@@ -597,50 +710,61 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                       user.isCurrentUser ? 'You!' : user.name,
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                        color: user.isCurrentUser ? const Color(0xFF5B9EF7) : Colors.black87,
+                        fontSize: 15,
+                        color: user.isCurrentUser ? const Color(0xFF5B9EF7) : const Color(0xFF2C3E50),
                       ),
                     ),
                     if (user.isCurrentUser) ...[
-                      const SizedBox(width: 8),
-                      const Text('✨⭐', style: TextStyle(fontSize: 12)),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF5B9EF7),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          'YOU',
+                          style: TextStyle(
+                            fontSize: 8,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
                     ],
                   ],
                 ),
+                const SizedBox(height: 2),
                 Text(
                   '${user.points} points',
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontSize: 12,
+                  style: const TextStyle(
+                    color: Color(0xFF6B7280),
+                    fontSize: 13,
                   ),
                 ),
               ],
             ),
           ),
-          
-          // Challenge button
+
+          // Challenge button (simplified)
           if (!user.isCurrentUser)
-            ElevatedButton(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Challenge feature coming soon!'),
-                    duration: Duration(seconds: 2),
-                  ),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFF9500),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF5B9EF7).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: const Color(0xFF5B9EF7).withValues(alpha: 0.3),
+                  width: 1,
                 ),
-                elevation: 0,
               ),
               child: const Text(
                 'Challenge',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF5B9EF7),
+                ),
               ),
             ),
         ],
