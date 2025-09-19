@@ -111,21 +111,28 @@ class _SoloPracticeScreenState extends State<SoloPracticeScreen> {
               ),
             ),
             SizedBox(width: 10),
-            Text(
-              'LearnMath',
-              style: TextStyle(
-                color: Color(0xFF2C3E50),
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            Spacer(),
-            Text(
-              'Choose Your Lesson',
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 14,
-                fontWeight: FontWeight.normal,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'LearnMath',
+                    style: TextStyle(
+                      color: Color(0xFF2C3E50),
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    'Choose Your Lesson',
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 12,
+                      fontWeight: FontWeight.normal,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

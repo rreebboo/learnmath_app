@@ -1,13 +1,19 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import '../models/math_topic.dart';
 import 'database_service.dart';
+import 'image_service.dart';
 
 class FirestoreService {
   // Use lazy initialization to avoid accessing Firebase before it's initialized
   FirebaseFirestore get _firestore => FirebaseFirestore.instance;
   FirebaseAuth get _auth => FirebaseAuth.instance;
   final DatabaseService _databaseService = DatabaseService();
+  final ImageService _imageService = ImageService();
+
+  // Check if Firebase is initialized
+  bool get _isFirebaseInitialized => Firebase.apps.isNotEmpty;
 
   // Get current user ID
   String? get currentUserId => _auth.currentUser?.uid;
@@ -15,6 +21,11 @@ class FirestoreService {
   // Get user data
   Future<Map<String, dynamic>?> getUserData(String userId) async {
     try {
+      if (!_isFirebaseInitialized) {
+        print('FirestoreService: Firebase not initialized, returning null');
+        return null;
+      }
+
       // print('FirestoreService: Fetching user data for: $userId');
       DocumentSnapshot doc = await _firestore.collection('users').doc(userId).get();
       
@@ -44,6 +55,10 @@ class FirestoreService {
         'name': user?.displayName ?? 'User',
         'email': user?.email,
         'avatar': '🦊',
+        'age': null,
+        'gradeLevel': 'Grade 2 Student',
+        'school': '',
+        'bio': '',
         'isAnonymous': user?.isAnonymous ?? false,
         'createdAt': FieldValue.serverTimestamp(),
         'totalScore': 0,
@@ -87,6 +102,10 @@ class FirestoreService {
     String? name,
     String? avatar,
     String? email,
+    int? age,
+    String? gradeLevel,
+    String? school,
+    String? bio,
   }) async {
     try {
       Map<String, dynamic> updateData = {
@@ -96,11 +115,57 @@ class FirestoreService {
       if (name != null) updateData['name'] = name;
       if (avatar != null) updateData['avatar'] = avatar;
       if (email != null) updateData['email'] = email;
+      if (age != null) updateData['age'] = age;
+      if (gradeLevel != null) updateData['gradeLevel'] = gradeLevel;
+      if (school != null) updateData['school'] = school;
+      if (bio != null) updateData['bio'] = bio;
 
       await _firestore.collection('users').doc(userId).update(updateData);
     } catch (e) {
       throw 'Error updating user profile: $e';
     }
+  }
+
+  // Update current user profile (convenience method)
+  Future<void> updateCurrentUserProfile({
+    String? name,
+    String? avatar,
+    int? age,
+    String? gradeLevel,
+    String? school,
+    String? bio,
+  }) async {
+    if (currentUserId == null) {
+      throw 'No user is currently logged in';
+    }
+
+    // If updating avatar and it's a new image URL, delete old image
+    if (avatar != null) {
+      try {
+        final currentData = await getCurrentUserData();
+        final currentAvatar = currentData?['avatar'];
+
+        if (currentAvatar != null &&
+            _imageService.isImageUrl(currentAvatar) &&
+            currentAvatar != avatar) {
+          // Delete old image if it's different from new one
+          await _imageService.deleteProfileImage(currentAvatar);
+        }
+      } catch (e) {
+        // Continue with update even if cleanup fails
+        print('Warning: Could not clean up old profile image: $e');
+      }
+    }
+
+    await updateUserProfile(
+      userId: currentUserId!,
+      name: name,
+      avatar: avatar,
+      age: age,
+      gradeLevel: gradeLevel,
+      school: school,
+      bio: bio,
+    );
   }
 
   // Update user score

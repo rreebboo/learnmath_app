@@ -3,7 +3,9 @@ import 'login_screen.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../services/progression_service.dart';
+import '../services/image_service.dart';
 import '../widgets/difficulty_reset_widget.dart';
+import 'package:image_picker/image_picker.dart';
 
 class ProfileScreen extends StatefulWidget {
   final VoidCallback? onBackPressed;
@@ -17,6 +19,7 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final AuthService _authService = AuthService();
   final FirestoreService _firestoreService = FirestoreService();
+  final ImageService _imageService = ImageService();
   Map<String, dynamic>? _userData;
   bool _isLoading = true;
   bool _soundEffects = true;
@@ -26,6 +29,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String get _userAvatar => _userData?['avatar'] ?? '👧';
   int get _badgesEarned => _userData?['badgesEarned'] ?? 12;
   String get _gradeLevel => _userData?['gradeLevel'] ?? 'Grade 2 Student';
+  int? get _userAge => _userData?['age'];
+  String get _userSchool => _userData?['school'] ?? '';
+  String get _userBio => _userData?['bio'] ?? '';
 
   @override
   void initState() {
@@ -43,6 +49,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         });
       }
     } catch (e) {
+      print('ProfileScreen: Error loading user data: $e');
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -160,9 +167,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             height: 70,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              gradient: LinearGradient(
-                                colors: [Color(0xFF7ED321), Color(0xFF9ACD32)],
-                              ),
+                              gradient: _imageService.isImageUrl(_userAvatar)
+                                ? null
+                                : LinearGradient(
+                                    colors: [Color(0xFF7ED321), Color(0xFF9ACD32)],
+                                  ),
+                              color: _imageService.isImageUrl(_userAvatar) ? Colors.white : null,
                               boxShadow: [
                                 BoxShadow(
                                   color: Color(0xFF7ED321).withValues(alpha: 0.3),
@@ -171,11 +181,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ),
                               ],
                             ),
-                            child: Center(
-                              child: Text(
-                                _userAvatar,
-                                style: TextStyle(fontSize: 35),
-                              ),
+                            child: ClipOval(
+                              child: _imageService.isImageUrl(_userAvatar)
+                                ? Image.network(
+                                    _userAvatar,
+                                    fit: BoxFit.cover,
+                                    width: 70,
+                                    height: 70,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Container(
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          gradient: LinearGradient(
+                                            colors: [Color(0xFF7ED321), Color(0xFF9ACD32)],
+                                          ),
+                                        ),
+                                        child: Center(
+                                          child: Icon(
+                                            Icons.person,
+                                            size: 35,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  )
+                                : Center(
+                                    child: Text(
+                                      _userAvatar,
+                                      style: TextStyle(fontSize: 35),
+                                    ),
+                                  ),
                             ),
                           ),
                           SizedBox(width: 15),
@@ -194,12 +230,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ),
                                 SizedBox(height: 4),
                                 Text(
-                                  _gradeLevel,
+                                  _userAge != null
+                                    ? '$_gradeLevel • Age $_userAge'
+                                    : _gradeLevel,
                                   style: TextStyle(
                                     fontSize: 14,
                                     color: Colors.grey[600],
                                   ),
                                 ),
+                                if (_userSchool.isNotEmpty) ...[
+                                  SizedBox(height: 2),
+                                  Text(
+                                    _userSchool,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey[500],
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                           ),
@@ -297,6 +346,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     SizedBox(height: 15),
                     
+                    // Edit Profile
+                    _buildSettingCard(
+                      icon: Icons.edit,
+                      iconColor: Color(0xFF5B9EF3),
+                      title: 'Edit Profile',
+                      subtitle: 'Name, age & info',
+                      onTap: () {
+                        _showEditProfileDialog();
+                      },
+                    ),
+
                     // Learning Style
                     _buildSettingCard(
                       icon: Icons.palette,
@@ -782,8 +842,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   void _showEditProfileDialog() {
     TextEditingController nameController = TextEditingController(text: _userName);
+    TextEditingController ageController = TextEditingController(text: _userAge?.toString() ?? '');
+    TextEditingController schoolController = TextEditingController(text: _userSchool);
+    TextEditingController bioController = TextEditingController(text: _userBio);
     String tempAvatar = _userAvatar;
+    String tempGradeLevel = _gradeLevel;
+
     final List<String> avatars = ['👧', '👦', '🦊', '🐶', '🐷', '🐱', '🐰', '🐼'];
+    final List<String> gradeLevels = [
+      'Pre-K Student',
+      'Kindergarten Student',
+      'Grade 1 Student',
+      'Grade 2 Student',
+      'Grade 3 Student',
+      'Grade 4 Student',
+      'Grade 5 Student',
+      'Grade 6 Student'
+    ];
 
     showDialog(
       context: context,
@@ -801,64 +876,299 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   color: Color(0xFF2C3E50),
                 ),
               ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: nameController,
-                    decoration: InputDecoration(
-                      labelText: 'Name',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+              content: Container(
+                width: double.maxFinite,
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.7,
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                    // Name Field
+                    TextField(
+                      controller: nameController,
+                      decoration: InputDecoration(
+                        labelText: 'Name',
+                        prefixIcon: Icon(Icons.person, color: Color(0xFF5B9EF3)),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Color(0xFF5B9EF3)),
+                        ),
                       ),
                     ),
-                  ),
-                  SizedBox(height: 20),
-                  Text(
-                    'Choose Avatar',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w500,
-                      color: Color(0xFF2C3E50),
+                    SizedBox(height: 16),
+
+                    // Age Field
+                    TextField(
+                      controller: ageController,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText: 'Age',
+                        prefixIcon: Icon(Icons.cake, color: Color(0xFF7ED321)),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Color(0xFF7ED321)),
+                        ),
+                      ),
                     ),
-                  ),
-                  SizedBox(height: 10),
-                  SizedBox(
-                    height: 60,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: avatars.length,
-                      itemBuilder: (context, index) {
-                        final avatar = avatars[index];
-                        final isSelected = avatar == tempAvatar;
-                        return GestureDetector(
-                          onTap: () {
+                    SizedBox(height: 16),
+
+                    // Grade Level Dropdown
+                    Text(
+                      'Grade Level',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF2C3E50),
+                        fontSize: 14,
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey[400]!),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: tempGradeLevel,
+                          isExpanded: true,
+                          icon: Icon(Icons.school, color: Color(0xFFFFA500)),
+                          items: gradeLevels.map((String grade) {
+                            return DropdownMenuItem<String>(
+                              value: grade,
+                              child: Text(grade),
+                            );
+                          }).toList(),
+                          onChanged: (String? newValue) {
                             setDialogState(() {
-                              tempAvatar = avatar;
+                              tempGradeLevel = newValue!;
                             });
                           },
-                          child: Container(
-                            margin: EdgeInsets.only(right: 10),
-                            width: 50,
-                            height: 50,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: isSelected ? Color(0xFF7ED321) : Colors.grey[200],
-                              border: isSelected 
-                                ? Border.all(color: Color(0xFF7ED321), width: 2)
-                                : null,
-                            ),
-                            child: Center(
-                              child: Text(
-                                avatar,
-                                style: TextStyle(fontSize: 25),
-                              ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 16),
+
+                    // School Field
+                    TextField(
+                      controller: schoolController,
+                      decoration: InputDecoration(
+                        labelText: 'School (Optional)',
+                        prefixIcon: Icon(Icons.school, color: Color(0xFFFFA500)),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Color(0xFFFFA500)),
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 16),
+
+                    // Bio Field
+                    TextField(
+                      controller: bioController,
+                      maxLines: 2,
+                      decoration: InputDecoration(
+                        labelText: 'About Me (Optional)',
+                        prefixIcon: Icon(Icons.info, color: Color(0xFF9C27B0)),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Color(0xFF9C27B0)),
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 20),
+
+                    // Avatar Selection
+                    Text(
+                      'Choose Avatar',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF2C3E50),
+                        fontSize: 14,
+                      ),
+                    ),
+                    SizedBox(height: 10),
+
+                    // Upload Photo Options
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () async {
+                              try {
+                                final XFile? image = await _imageService.pickImageFromGallery();
+                                if (image != null) {
+                                  // Show loading indicator
+                                  showDialog(
+                                    context: context,
+                                    barrierDismissible: false,
+                                    builder: (context) => Center(
+                                      child: CircularProgressIndicator(),
+                                    ),
+                                  );
+
+                                  // Upload image
+                                  final imageUrl = await _imageService.uploadProfileImage(image);
+                                  Navigator.pop(context); // Close loading
+
+                                  setDialogState(() {
+                                    tempAvatar = imageUrl;
+                                  });
+                                }
+                              } catch (e) {
+                                Navigator.of(context).pop(); // Close loading if open
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Error uploading image: $e')),
+                                );
+                              }
+                            },
+                            icon: Icon(Icons.photo_library, size: 16),
+                            label: Text('Gallery', style: TextStyle(fontSize: 12)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Color(0xFF5B9EF3),
+                              foregroundColor: Colors.white,
+                              padding: EdgeInsets.symmetric(vertical: 8),
                             ),
                           ),
-                        );
-                      },
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () async {
+                              try {
+                                final XFile? image = await _imageService.pickImageFromCamera();
+                                if (image != null) {
+                                  // Show loading indicator
+                                  showDialog(
+                                    context: context,
+                                    barrierDismissible: false,
+                                    builder: (context) => Center(
+                                      child: CircularProgressIndicator(),
+                                    ),
+                                  );
+
+                                  // Upload image
+                                  final imageUrl = await _imageService.uploadProfileImage(image);
+                                  Navigator.pop(context); // Close loading
+
+                                  setDialogState(() {
+                                    tempAvatar = imageUrl;
+                                  });
+                                }
+                              } catch (e) {
+                                Navigator.of(context).pop(); // Close loading if open
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Error taking photo: $e')),
+                                );
+                              }
+                            },
+                            icon: Icon(Icons.camera_alt, size: 16),
+                            label: Text('Camera', style: TextStyle(fontSize: 12)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Color(0xFF7ED321),
+                              foregroundColor: Colors.white,
+                              padding: EdgeInsets.symmetric(vertical: 8),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
+                    SizedBox(height: 15),
+
+                    // Current Avatar Preview
+                    Center(
+                      child: Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.grey[200],
+                          border: Border.all(color: Color(0xFF7ED321), width: 2),
+                        ),
+                        child: ClipOval(
+                          child: _imageService.isImageUrl(tempAvatar)
+                            ? Image.network(
+                                tempAvatar,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Icon(Icons.person, size: 40, color: Colors.grey);
+                                },
+                              )
+                            : Center(
+                                child: Text(
+                                  tempAvatar,
+                                  style: TextStyle(fontSize: 35),
+                                ),
+                              ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 15),
+
+                    // Emoji Avatar Options
+                    Text(
+                      'Or choose an emoji avatar:',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w400,
+                        color: Colors.grey[600],
+                        fontSize: 12,
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    SizedBox(
+                      height: 50,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: avatars.length,
+                        itemBuilder: (context, index) {
+                          final avatar = avatars[index];
+                          final isSelected = avatar == tempAvatar;
+                          return GestureDetector(
+                            onTap: () {
+                              setDialogState(() {
+                                tempAvatar = avatar;
+                              });
+                            },
+                            child: Container(
+                              margin: EdgeInsets.only(right: 8),
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: isSelected ? Color(0xFF7ED321).withValues(alpha: 0.2) : Colors.grey[100],
+                                border: isSelected
+                                  ? Border.all(color: Color(0xFF7ED321), width: 2)
+                                  : Border.all(color: Colors.grey[300]!, width: 1),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  avatar,
+                                  style: TextStyle(fontSize: 20),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    ],
                   ),
-                ],
+                ),
               ),
               actions: [
                 TextButton(
@@ -870,17 +1180,45 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 ElevatedButton(
                   onPressed: () async {
-                    try {
-                      final userId = _authService.getUserId();
-                      if (userId != null) {
-                        await _firestoreService.updateUserProfile(
-                          userId: userId,
-                          name: nameController.text,
-                          avatar: tempAvatar,
+                    // Validate age input
+                    int? age;
+                    if (ageController.text.isNotEmpty) {
+                      age = int.tryParse(ageController.text);
+                      if (age == null || age < 3 || age > 18) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Please enter a valid age between 3 and 18')),
                         );
-                        await _loadUserData();
+                        return;
                       }
-                      if (mounted) Navigator.pop(context);
+                    }
+
+                    // Validate name
+                    if (nameController.text.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Name cannot be empty')),
+                      );
+                      return;
+                    }
+
+                    try {
+                      await _firestoreService.updateCurrentUserProfile(
+                        name: nameController.text.trim(),
+                        avatar: tempAvatar,
+                        age: age,
+                        gradeLevel: tempGradeLevel,
+                        school: schoolController.text.trim(),
+                        bio: bioController.text.trim(),
+                      );
+                      await _loadUserData();
+                      if (mounted) {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Profile updated successfully!'),
+                            backgroundColor: Color(0xFF7ED321),
+                          ),
+                        );
+                      }
                     } catch (e) {
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
