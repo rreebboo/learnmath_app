@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/database_service.dart';
 import '../services/firestore_service.dart';
+import '../widgets/user_avatar.dart';
 import 'dart:async';
 
 class AchievementsScreen extends StatefulWidget {
@@ -13,18 +15,58 @@ class AchievementsScreen extends StatefulWidget {
 class _AchievementsScreenState extends State<AchievementsScreen> {
   final DatabaseService _databaseService = DatabaseService();
   final FirestoreService _firestoreService = FirestoreService();
-  
+
   List<Map<String, dynamic>> _allAchievements = [];
   List<String> _userAchievements = [];
   Map<String, dynamic>? _userStats;
   bool _isLoading = true;
   String? _error;
 
+  // Real-time stream subscriptions
+  StreamSubscription<DocumentSnapshot>? _userDataSubscription;
+
   @override
   void initState() {
     super.initState();
     _loadAchievements();
+    _setupRealTimeUpdates();
   }
+
+  @override
+  void dispose() {
+    _userDataSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _setupRealTimeUpdates() {
+    final currentUserId = _firestoreService.currentUserId;
+    if (currentUserId != null) {
+      _userDataSubscription = _firestoreService.getUserDataStream(currentUserId).listen(
+        (userDataDoc) {
+          if (userDataDoc.exists && mounted) {
+            final userData = userDataDoc.data() as Map<String, dynamic>?;
+            final achievementsData = userData?['achievements'] as List<dynamic>? ?? [];
+            final newUserAchievements = achievementsData
+                .map((achievement) => achievement['id'] as String)
+                .toList();
+
+            setState(() {
+              _userStats = userData;
+              _userAchievements = newUserAchievements;
+            });
+          }
+        },
+        onError: (error) {
+          if (mounted) {
+            setState(() {
+              _error = 'Error loading real-time updates: $error';
+            });
+          }
+        },
+      );
+    }
+  }
+
 
   Future<void> _loadAchievements() async {
     setState(() {
@@ -35,13 +77,16 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
     try {
       // Load all available achievements
       final achievements = await _databaseService.getAchievements();
-      
-      // Load user's unlocked achievements and stats
+
+      // Initial load of user data (real-time updates will be handled by stream)
       final currentUserId = _firestoreService.currentUserId;
       if (currentUserId != null) {
         final userData = await _firestoreService.getUserData(currentUserId);
-        final userAchievements = List<String>.from(userData?['achievements'] ?? []);
-        
+        final achievementsData = userData?['achievements'] as List<dynamic>? ?? [];
+        final userAchievements = achievementsData
+            .map((achievement) => achievement['id'] as String)
+            .toList();
+
         setState(() {
           _allAchievements = achievements;
           _userAchievements = userAchievements;
@@ -163,15 +208,20 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
   }
 
   int _calculateTotalXP() {
-    int totalXP = 0;
+    // Use user's totalScore from Firestore as the primary XP source
+    int baseXP = (_userStats?['totalScore'] as int?) ?? 0;
+
+    // Add bonus XP from achievements
+    int achievementXP = 0;
     for (var achievementId in _userAchievements) {
       var achievement = _allAchievements.firstWhere(
         (a) => a['id'] == achievementId,
         orElse: () => {'points': 0},
       );
-      totalXP += (achievement['points'] as int?) ?? 0;
+      achievementXP += (achievement['points'] as int?) ?? 0;
     }
-    return totalXP;
+
+    return baseXP + achievementXP;
   }
 
   @override
@@ -194,7 +244,7 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
                   end: Alignment.bottomRight,
                 ),
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Column(
                 children: [
                   Row(
@@ -220,11 +270,11 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
                   // Enhanced Trophy Logo
                   Container(
-                    width: 100,
-                    height: 100,
+                    width: 80,
+                    height: 80,
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
                         colors: [Color(0xFFFFD700), Color(0xFFFFA500)],
@@ -254,7 +304,7 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
                           child: Icon(
                             Icons.emoji_events,
                             color: Colors.white,
-                            size: 50,
+                            size: 40,
                           ),
                         ),
                         // Sparkle effects
@@ -285,7 +335,7 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
                   // Level and XP Display
                   _buildLevelCard(totalXP),
                 ],
@@ -294,7 +344,7 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
             
             // Ultra Compact Stats Row
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
               child: Row(
                 children: [
                   Expanded(
@@ -323,9 +373,9 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
                 ],
               ),
             ),
-            
-            const SizedBox(height: 12),
-            
+
+            const SizedBox(height: 8),
+
             // Achievements Content
             Expanded(
               child: Container(
@@ -523,7 +573,7 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
     
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -544,32 +594,12 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
               Row(
                 children: [
                   // User Avatar
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF6366F1).withValues(alpha: 0.3),
-                          blurRadius: 6,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: const Center(
-                      child: Text(
-                        '🦊',
-                        style: TextStyle(
-                          fontSize: 20,
-                        ),
-                      ),
-                    ),
+                  UserAvatar(
+                    avatar: _userStats?['avatar'] ?? '🦊',
+                    size: 40,
+                    backgroundColor: Colors.white,
+                    gradientColors: const [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                    showBorder: false,
                   ),
                   const SizedBox(width: 12),
                   Column(
@@ -626,7 +656,7 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           // Progress Bar
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,

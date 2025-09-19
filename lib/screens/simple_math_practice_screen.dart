@@ -631,7 +631,7 @@ class _SimpleMathPracticeScreenState extends State<SimpleMathPracticeScreen> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Icon(
-                                Icons.emoji_events,
+                                Icons.leaderboard,
                                 color: _getDifficultyColor(widget.difficulty),
                                 size: 24,
                               ),

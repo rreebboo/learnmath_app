@@ -359,6 +359,11 @@ class FirestoreService {
     return streamUserData(currentUserId!);
   }
 
+  // Get user data stream (alias for streamUserData for consistency)
+  Stream<DocumentSnapshot> getUserDataStream(String userId) {
+    return streamUserData(userId);
+  }
+
   // Get leaderboard (top users by score)
   Future<List<Map<String, dynamic>>> getLeaderboard({int limit = 10}) async {
     try {

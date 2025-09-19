@@ -115,7 +115,7 @@ class _UserStatisticsWidgetState extends State<UserStatisticsWidget> {
                 child: _buildStatCard(
                   'Total Score',
                   _statsService.totalScore.toString(),
-                  Icons.emoji_events,
+                  Icons.leaderboard,
                   const Color(0xFFFFA500),
                 ),
               ),

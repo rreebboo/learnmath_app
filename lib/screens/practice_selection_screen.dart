@@ -123,7 +123,7 @@ class PracticeSelectionScreen extends StatelessWidget {
                 'Challenge Mode',
                 'Test your skills with advanced problems',
                 const Color(0xFFFF6B6B),
-                Icons.emoji_events,
+                Icons.leaderboard,
                 () {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(

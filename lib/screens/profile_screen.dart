@@ -5,6 +5,7 @@ import '../services/firestore_service.dart';
 import '../services/progression_service.dart';
 import '../services/image_service.dart';
 import '../widgets/difficulty_reset_widget.dart';
+import '../widgets/user_avatar.dart';
 import 'package:image_picker/image_picker.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -162,57 +163,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       child: Row(
                         children: [
                           // Avatar
-                          Container(
-                            width: 70,
-                            height: 70,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: _imageService.isImageUrl(_userAvatar)
-                                ? null
-                                : LinearGradient(
-                                    colors: [Color(0xFF7ED321), Color(0xFF9ACD32)],
-                                  ),
-                              color: _imageService.isImageUrl(_userAvatar) ? Colors.white : null,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Color(0xFF7ED321).withValues(alpha: 0.3),
-                                  blurRadius: 10,
-                                  offset: Offset(0, 5),
-                                ),
-                              ],
-                            ),
-                            child: ClipOval(
-                              child: _imageService.isImageUrl(_userAvatar)
-                                ? Image.network(
-                                    _userAvatar,
-                                    fit: BoxFit.cover,
-                                    width: 70,
-                                    height: 70,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return Container(
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          gradient: LinearGradient(
-                                            colors: [Color(0xFF7ED321), Color(0xFF9ACD32)],
-                                          ),
-                                        ),
-                                        child: Center(
-                                          child: Icon(
-                                            Icons.person,
-                                            size: 35,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  )
-                                : Center(
-                                    child: Text(
-                                      _userAvatar,
-                                      style: TextStyle(fontSize: 35),
-                                    ),
-                                  ),
-                            ),
+                          UserAvatar(
+                            avatar: _userAvatar,
+                            size: 70,
+                            backgroundColor: Colors.white,
+                            gradientColors: const [Color(0xFF7ED321), Color(0xFF9ACD32)],
                           ),
                           SizedBox(width: 15),
                           // User Info
@@ -291,7 +246,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(
-                      Icons.emoji_events,
+                      Icons.leaderboard,
                       color: Colors.white,
                       size: 24,
                     ),
@@ -1017,8 +972,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   showDialog(
                                     context: context,
                                     barrierDismissible: false,
-                                    builder: (context) => Center(
-                                      child: CircularProgressIndicator(),
+                                    builder: (context) => AlertDialog(
+                                      content: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          CircularProgressIndicator(),
+                                          SizedBox(height: 16),
+                                          Text('Uploading image...'),
+                                        ],
+                                      ),
                                     ),
                                   );
 
@@ -1029,11 +991,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   setDialogState(() {
                                     tempAvatar = imageUrl;
                                   });
+
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Image uploaded successfully!'),
+                                      backgroundColor: Color(0xFF7ED321),
+                                    ),
+                                  );
                                 }
                               } catch (e) {
-                                Navigator.of(context).pop(); // Close loading if open
+                                if (Navigator.canPop(context)) {
+                                  Navigator.of(context).pop(); // Close loading if open
+                                }
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Error uploading image: $e')),
+                                  SnackBar(
+                                    content: Text('$e'),
+                                    backgroundColor: Colors.red,
+                                    duration: Duration(seconds: 4),
+                                  ),
                                 );
                               }
                             },
@@ -1057,8 +1032,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   showDialog(
                                     context: context,
                                     barrierDismissible: false,
-                                    builder: (context) => Center(
-                                      child: CircularProgressIndicator(),
+                                    builder: (context) => AlertDialog(
+                                      content: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          CircularProgressIndicator(),
+                                          SizedBox(height: 16),
+                                          Text('Uploading image...'),
+                                        ],
+                                      ),
                                     ),
                                   );
 
@@ -1069,11 +1051,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   setDialogState(() {
                                     tempAvatar = imageUrl;
                                   });
+
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Image uploaded successfully!'),
+                                      backgroundColor: Color(0xFF7ED321),
+                                    ),
+                                  );
                                 }
                               } catch (e) {
-                                Navigator.of(context).pop(); // Close loading if open
+                                if (Navigator.canPop(context)) {
+                                  Navigator.of(context).pop(); // Close loading if open
+                                }
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Error taking photo: $e')),
+                                  SnackBar(
+                                    content: Text('$e'),
+                                    backgroundColor: Colors.red,
+                                    duration: Duration(seconds: 4),
+                                  ),
                                 );
                               }
                             },
@@ -1092,30 +1087,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                     // Current Avatar Preview
                     Center(
-                      child: Container(
-                        width: 80,
-                        height: 80,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.grey[200],
-                          border: Border.all(color: Color(0xFF7ED321), width: 2),
-                        ),
-                        child: ClipOval(
-                          child: _imageService.isImageUrl(tempAvatar)
-                            ? Image.network(
-                                tempAvatar,
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) {
-                                  return Icon(Icons.person, size: 40, color: Colors.grey);
-                                },
-                              )
-                            : Center(
-                                child: Text(
-                                  tempAvatar,
-                                  style: TextStyle(fontSize: 35),
-                                ),
-                              ),
-                        ),
+                      child: UserAvatar(
+                        avatar: tempAvatar,
+                        size: 80,
+                        backgroundColor: Colors.grey[200],
+                        showBorder: true,
+                        borderColor: Color(0xFF7ED321),
+                        borderWidth: 2,
+                        gradientColors: const [Color(0xFF7ED321), Color(0xFF9ACD32)],
                       ),
                     ),
                     SizedBox(height: 15),

@@ -6,6 +6,7 @@ import 'adaptive_quiz_screen.dart';
 import 'leaderboard_screen.dart';
 import '../services/firestore_service.dart';
 import '../services/user_preferences_service.dart';
+import '../widgets/user_avatar.dart';
 
 class HomeContent extends StatefulWidget {
   final Function(int) onTabChange;
@@ -167,21 +168,10 @@ class _HomeContentState extends State<HomeContent> with TickerProviderStateMixin
                   children: [
                     Row(
                       children: [
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: const BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: LinearGradient(
-                              colors: [Color(0xFF7ED321), Color(0xFF9ACD32)],
-                            ),
-                          ),
-                          child: Center(
-                            child: Text(
-                              _userData?['avatar'] ?? '🦊',
-                              style: const TextStyle(fontSize: 20),
-                            ),
-                          ),
+                        UserAvatar(
+                          avatar: _userData?['avatar'] ?? '🦊',
+                          size: 40,
+                          gradientColors: const [Color(0xFF7ED321), Color(0xFF9ACD32)],
                         ),
                         const SizedBox(width: 8),
                         Column(
@@ -242,7 +232,7 @@ class _HomeContentState extends State<HomeContent> with TickerProviderStateMixin
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Icon(
-                              Icons.emoji_events,
+                              Icons.leaderboard,
                               color: Colors.amber.shade600,
                               size: 20,
                             ),
@@ -405,8 +395,8 @@ class _HomeContentState extends State<HomeContent> with TickerProviderStateMixin
 
                 // Leaderboards - Featured at the top
                 _buildQuickActionCard(
-                  Icons.emoji_events,
-                  'Leaderboards 🏆',
+                  Icons.leaderboard,
+                  'Leaderboards',
                   'See how you rank against others!',
                   const Color(0xFFFFB74D), // Consistent amber
                   () {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/firestore_service.dart';
 import '../services/friends_service.dart';
+import '../widgets/user_avatar.dart';
 import 'friends_screen.dart';
 
 class QuizScreen extends StatefulWidget {
@@ -146,21 +147,10 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
       children: [
         Row(
           children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: [Color(0xFF7ED321), Color(0xFF9ACD32)],
-                ),
-              ),
-              child: Center(
-                child: Text(
-                  _userData?['avatar'] ?? '🦊',
-                  style: const TextStyle(fontSize: 20),
-                ),
-              ),
+            UserAvatar(
+              avatar: _userData?['avatar'] ?? '🦊',
+              size: 40,
+              gradientColors: const [Color(0xFF7ED321), Color(0xFF9ACD32)],
             ),
             const SizedBox(width: 12),
             Column(
@@ -185,7 +175,7 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
                 Row(
                   children: [
                     const Icon(
-                      Icons.emoji_events,
+                      Icons.leaderboard,
                       size: 14,
                       color: Colors.amber,
                     ),
@@ -348,7 +338,7 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
 
         // Tournament
         _buildGameModeCard(
-          icon: Icons.emoji_events,
+          icon: Icons.leaderboard,
           title: 'Tournament',
           subtitle: 'Compete in championships',
           color: const Color(0xFFFFA500),
@@ -375,7 +365,7 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
           children: [
             Expanded(
               child: _buildStatCard(
-                icon: Icons.emoji_events,
+                icon: Icons.leaderboard,
                 title: 'Wins',
                 value: '${_userData?['wins'] ?? 0}',
                 color: const Color(0xFF7ED321),
@@ -483,20 +473,14 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
   Widget _buildPlayerPreview(String avatar, String name, bool isUser) {
     return Column(
       children: [
-        Container(
-          width: 60,
-          height: 60,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.2),
-            borderRadius: BorderRadius.circular(15),
-            border: Border.all(color: Colors.white, width: 2),
-          ),
-          child: Center(
-            child: Text(
-              avatar,
-              style: const TextStyle(fontSize: 24),
-            ),
-          ),
+        UserAvatar(
+          avatar: avatar,
+          size: 60,
+          backgroundColor: Colors.white.withValues(alpha: 0.2),
+          showBorder: true,
+          borderColor: Colors.white,
+          borderWidth: 2,
+          gradientColors: const [Color(0xFF7ED321), Color(0xFF9ACD32)],
         ),
         const SizedBox(height: 8),
         Text(
@@ -645,19 +629,11 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
               ),
               child: Column(
                 children: [
-                  Container(
-                    width: 80,
-                    height: 80,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white,
-                    ),
-                    child: Center(
-                      child: Text(
-                        _userData?['avatar'] ?? '🦊',
-                        style: const TextStyle(fontSize: 36),
-                      ),
-                    ),
+                  UserAvatar(
+                    avatar: _userData?['avatar'] ?? '🦊',
+                    size: 80,
+                    backgroundColor: Colors.white,
+                    gradientColors: const [Color(0xFF7ED321), Color(0xFF9ACD32)],
                   ),
                   const SizedBox(height: 16),
                   Text(
@@ -706,7 +682,7 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
                     },
                   ),
                   _buildDrawerItem(
-                    icon: Icons.emoji_events,
+                    icon: Icons.leaderboard,
                     title: 'Tournaments',
                     subtitle: 'Join math competitions',
                     onTap: () {

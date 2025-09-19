@@ -50,13 +50,27 @@ class ImageService {
         throw 'Firebase is not initialized';
       }
 
+      // Wait for authentication state to be ready
       final user = _auth.currentUser;
       if (user == null) {
         throw 'No user logged in';
       }
 
+      // Force refresh the authentication token to ensure it's valid
+      await user.reload();
+      final refreshedUser = _auth.currentUser;
+      if (refreshedUser == null) {
+        throw 'User authentication expired, please log in again';
+      }
+
+      // Get fresh ID token to ensure authentication is valid
+      final idToken = await refreshedUser.getIdToken(true);
+      if (idToken == null || idToken.isEmpty) {
+        throw 'Unable to get authentication token, please log in again';
+      }
+
       // Create a unique file name
-      final String fileName = 'profile_${user.uid}_${DateTime.now().millisecondsSinceEpoch}${path.extension(imageFile.path)}';
+      final String fileName = 'profile_${refreshedUser.uid}_${DateTime.now().millisecondsSinceEpoch}${path.extension(imageFile.path)}';
 
       // Create reference to Firebase Storage
       final Reference ref = _storage
@@ -64,8 +78,17 @@ class ImageService {
           .child('profile_images')
           .child(fileName);
 
-      // Upload file
-      final UploadTask uploadTask = ref.putFile(File(imageFile.path));
+      // Set metadata to include content type
+      final SettableMetadata metadata = SettableMetadata(
+        contentType: 'image/${path.extension(imageFile.path).substring(1)}',
+        customMetadata: {
+          'uploadedBy': refreshedUser.uid,
+          'uploadedAt': DateTime.now().toIso8601String(),
+        },
+      );
+
+      // Upload file with metadata
+      final UploadTask uploadTask = ref.putFile(File(imageFile.path), metadata);
 
       // Wait for upload to complete
       final TaskSnapshot snapshot = await uploadTask;
@@ -74,6 +97,14 @@ class ImageService {
       final String downloadUrl = await snapshot.ref.getDownloadURL();
 
       return downloadUrl;
+    } on FirebaseException catch (e) {
+      if (e.code == 'unauthorized') {
+        throw 'Permission denied. Please log out and log back in, then try again.';
+      } else if (e.code == 'unauthenticated') {
+        throw 'Authentication required. Please log in again.';
+      } else {
+        throw 'Firebase error: ${e.message}';
+      }
     } catch (e) {
       throw 'Error uploading image: $e';
     }

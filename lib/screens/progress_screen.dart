@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import '../services/user_statistics_service.dart';
 import '../services/firestore_service.dart';
+import '../widgets/user_avatar.dart';
 import 'achievements_screen.dart';
 import 'leaderboard_screen.dart';
 
@@ -340,30 +341,51 @@ class _ProgressScreenState extends State<ProgressScreen> with TickerProviderStat
               ],
             ),
           ),
+          // Leaderboard Button
           Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: const Color(0xFF4169E1).withValues(alpha: 0.2),
-                width: 2,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.08),
-                  blurRadius: 8,
-                  offset: const Offset(0, 3),
+            margin: const EdgeInsets.only(right: 12),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const LeaderboardScreen(),
+                    ),
+                  );
+                },
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4169E1).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: const Color(0xFF4169E1).withValues(alpha: 0.2),
+                      width: 2,
+                    ),
+                  ),
+                  child: const Center(
+                    child: Icon(
+                      Icons.leaderboard,
+                      color: Color(0xFF4169E1),
+                      size: 24,
+                    ),
+                  ),
                 ),
-              ],
-            ),
-            child: Center(
-              child: Text(
-                _userData?['avatar'] ?? '🦊',
-                style: const TextStyle(fontSize: 24),
               ),
             ),
+          ),
+          UserAvatar(
+            avatar: _userData?['avatar'] ?? '🦊',
+            size: 48,
+            backgroundColor: Colors.white,
+            showBorder: true,
+            borderColor: const Color(0xFF4169E1),
+            borderWidth: 2,
+            gradientColors: const [Color(0xFF7ED321), Color(0xFF9ACD32)],
           ),
         ],
       ),

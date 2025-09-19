@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/friends_service.dart';
 import '../services/firestore_service.dart';
+import '../widgets/user_avatar.dart';
 
 class FriendsScreen extends StatefulWidget {
   const FriendsScreen({super.key});
@@ -448,21 +449,10 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
               // Avatar with online status
               Stack(
                 children: [
-                  Container(
-                    width: isSmallScreen ? 40 : 50,
-                    height: isSmallScreen ? 40 : 50,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: LinearGradient(
-                        colors: [Color(0xFF7ED321), Color(0xFF9ACD32)],
-                      ),
-                    ),
-                    child: Center(
-                      child: Text(
-                        friend['avatar'] ?? '🦊',
-                        style: TextStyle(fontSize: isSmallScreen ? 20 : 24),
-                      ),
-                    ),
+                  UserAvatar(
+                    avatar: friend['avatar'] ?? '🦊',
+                    size: isSmallScreen ? 40 : 50,
+                    gradientColors: const [Color(0xFF7ED321), Color(0xFF9ACD32)],
                   ),
                   if (friend['isOnline'] == true)
                     Positioned(
@@ -502,7 +492,7 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
                     Row(
                       children: [
                         Icon(
-                          Icons.emoji_events,
+                          Icons.leaderboard,
                           size: isSmallScreen ? 12 : 14,
                           color: Colors.grey[600],
                         ),
@@ -626,21 +616,10 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
             children: [
               Row(
                 children: [
-                  Container(
-                    width: isSmallScreen ? 40 : 50,
-                    height: isSmallScreen ? 40 : 50,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: LinearGradient(
-                        colors: [Color(0xFF7ED321), Color(0xFF9ACD32)],
-                      ),
-                    ),
-                    child: Center(
-                      child: Text(
-                        request['avatar'] ?? '🦊',
-                        style: TextStyle(fontSize: isSmallScreen ? 20 : 24),
-                      ),
-                    ),
+                  UserAvatar(
+                    avatar: request['avatar'] ?? '🦊',
+                    size: isSmallScreen ? 40 : 50,
+                    gradientColors: const [Color(0xFF7ED321), Color(0xFF9ACD32)],
                   ),
                   SizedBox(width: isSmallScreen ? 10 : 15),
 
@@ -773,21 +752,10 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
           ),
           child: Row(
             children: [
-              Container(
-                width: isSmallScreen ? 40 : 50,
-                height: isSmallScreen ? 40 : 50,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF7ED321), Color(0xFF9ACD32)],
-                  ),
-                ),
-                child: Center(
-                  child: Text(
-                    user['avatar'] ?? '🦊',
-                    style: TextStyle(fontSize: isSmallScreen ? 20 : 24),
-                  ),
-                ),
+              UserAvatar(
+                avatar: user['avatar'] ?? '🦊',
+                size: isSmallScreen ? 40 : 50,
+                gradientColors: const [Color(0xFF7ED321), Color(0xFF9ACD32)],
               ),
               SizedBox(width: isSmallScreen ? 10 : 15),
 

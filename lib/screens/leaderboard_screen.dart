@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/leaderboard_service.dart';
+import '../widgets/user_avatar.dart';
 import 'dart:async';
 
 class LeaderboardScreen extends StatefulWidget {
@@ -229,7 +230,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
         centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.emoji_events, color: Colors.white),
+            icon: const Icon(Icons.leaderboard, color: Colors.white),
             onPressed: () {},
           ),
         ],
@@ -482,7 +483,11 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           child: Center(
             child: isPlaceholder
                 ? Icon(Icons.person_outline, color: Colors.grey.shade400)
-                : Text(user.avatar, style: const TextStyle(fontSize: 28)),
+                : UserAvatar(
+                    avatar: user.avatar,
+                    size: 56,
+                    gradientColors: const [Color(0xFF7ED321), Color(0xFF9ACD32)],
+                  ),
           ),
         ),
         const SizedBox(height: 8),
@@ -570,23 +575,14 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           const SizedBox(width: 12),
           
           // Avatar
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: const Color(0xFFFFF3DC),
-              border: Border.all(
-                color: user.isCurrentUser ? const Color(0xFF5B9EF7) : const Color(0xFFFFD700),
-                width: 2,
-              ),
-            ),
-            child: Center(
-              child: Text(
-                user.avatar,
-                style: const TextStyle(fontSize: 24),
-              ),
-            ),
+          UserAvatar(
+            avatar: user.avatar,
+            size: 48,
+            backgroundColor: const Color(0xFFFFF3DC),
+            showBorder: true,
+            borderColor: user.isCurrentUser ? const Color(0xFF5B9EF7) : const Color(0xFFFFD700),
+            borderWidth: 2,
+            gradientColors: const [Color(0xFF7ED321), Color(0xFF9ACD32)],
           ),
           const SizedBox(width: 12),
           
@@ -767,7 +763,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const Icon(
-                Icons.emoji_events_outlined,
+                Icons.leaderboard_outlined,
                 size: 64,
                 color: Colors.grey,
               ),
