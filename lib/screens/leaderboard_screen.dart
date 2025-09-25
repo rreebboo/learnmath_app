@@ -13,8 +13,8 @@ class LeaderboardScreen extends StatefulWidget {
 class _LeaderboardScreenState extends State<LeaderboardScreen> {
   String selectedPeriod = 'Weekly';
   String selectedGrade = 'Grade 1';
-  
-  final LeaderboardService _leaderboardService = LeaderboardService();
+
+  final LeaderboardService _leaderboardService = LeaderboardService.instance;
   StreamSubscription<List<LeaderboardUser>>? _leaderboardSubscription;
   List<LeaderboardUser> _leaderboardData = [];
   bool _isLoading = true;
@@ -23,6 +23,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   @override
   void initState() {
     super.initState();
+    print('🎯 LEADERBOARD SCREEN: initState() called - initializing leaderboard screen');
     _loadLeaderboardData();
   }
 
@@ -42,18 +43,26 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
 
     try {
       Stream<List<LeaderboardUser>> stream;
-      
+
       if (selectedPeriod == 'Weekly') {
+        print('📊 LEADERBOARD SCREEN: Loading WEEKLY leaderboard');
         stream = _leaderboardService.getWeeklyLeaderboardStream();
       } else if (selectedPeriod == 'Monthly') {
+        print('📊 LEADERBOARD SCREEN: Loading MONTHLY leaderboard');
         stream = _leaderboardService.getMonthlyLeaderboardStream();
       } else {
+        print('📊 LEADERBOARD SCREEN: Loading ALL-TIME leaderboard');
         stream = _leaderboardService.getLeaderboardStream(period: 'all-time');
       }
+
 
       _leaderboardSubscription = stream.listen(
         (data) {
           if (mounted) {
+            print('LeaderboardScreen: Received $selectedPeriod data with ${data.length} users');
+            for (var user in data) {
+              print('  - ${user.name}: ${user.points} points (rank ${user.rank})');
+            }
             setState(() {
               _leaderboardData = data;
               _isLoading = false;
@@ -63,10 +72,24 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
         },
         onError: (error) {
           if (mounted) {
-            // Show fallback data on error
-            _loadFallbackData();
+            String errorMessage;
+            if (error.toString().contains('permission-denied')) {
+              errorMessage = 'Permission denied. Please try signing in again.';
+            } else if (error.toString().contains('unavailable')) {
+              errorMessage = 'Service temporarily unavailable. Please try again.';
+            } else if (selectedPeriod != 'All-time') {
+              // For weekly/monthly, show empty state
+              setState(() {
+                _leaderboardData = [];
+                _isLoading = false;
+                _error = null;
+              });
+              return;
+            } else {
+              errorMessage = 'Unable to load leaderboard data. Please check your connection.';
+            }
             setState(() {
-              _error = 'Unable to load latest data. Showing sample leaderboard.';
+              _error = errorMessage;
               _isLoading = false;
             });
           }
@@ -75,123 +98,14 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
 
     } catch (e) {
       if (mounted) {
-        _loadFallbackData();
         setState(() {
-          _error = 'Connection error. Showing sample leaderboard.';
+          _error = 'Connection error. Tap to retry or check your internet connection.';
           _isLoading = false;
         });
       }
     }
   }
 
-  void _loadFallbackData() {
-    // Provide sample data when Firebase is not available
-    final currentUserId = _leaderboardService.firestoreService.currentUserId;
-    
-    _leaderboardData = [
-      LeaderboardUser(
-        id: 'sample1',
-        rank: 1,
-        name: 'Alex',
-        avatar: '👨‍🎓',
-        points: 1200,
-        streak: 15,
-        lessonsCompleted: 45,
-        isCurrentUser: false,
-      ),
-      LeaderboardUser(
-        id: 'sample2',
-        rank: 2,
-        name: 'Emma',
-        avatar: '👩‍🎓',
-        points: 850,
-        streak: 12,
-        lessonsCompleted: 38,
-        isCurrentUser: false,
-      ),
-      LeaderboardUser(
-        id: 'sample3',
-        rank: 3,
-        name: 'Sam',
-        avatar: '👨',
-        points: 750,
-        streak: 8,
-        lessonsCompleted: 32,
-        isCurrentUser: false,
-      ),
-      LeaderboardUser(
-        id: 'sample4',
-        rank: 4,
-        name: 'Mia',
-        avatar: '👧',
-        points: 650,
-        streak: 10,
-        lessonsCompleted: 30,
-        isCurrentUser: false,
-      ),
-      LeaderboardUser(
-        id: 'sample5',
-        rank: 5,
-        name: 'Jake',
-        avatar: '👦',
-        points: 620,
-        streak: 7,
-        lessonsCompleted: 28,
-        isCurrentUser: false,
-      ),
-      LeaderboardUser(
-        id: 'sample6',
-        rank: 6,
-        name: 'Lily',
-        avatar: '👩',
-        points: 600,
-        streak: 5,
-        lessonsCompleted: 25,
-        isCurrentUser: false,
-      ),
-      LeaderboardUser(
-        id: currentUserId ?? 'you',
-        rank: 7,
-        name: 'You!',
-        avatar: '⭐',
-        points: 580,
-        streak: 4,
-        lessonsCompleted: 22,
-        isCurrentUser: true,
-      ),
-      LeaderboardUser(
-        id: 'sample8',
-        rank: 8,
-        name: 'Ben',
-        avatar: '👦',
-        points: 520,
-        streak: 3,
-        lessonsCompleted: 20,
-        isCurrentUser: false,
-      ),
-      LeaderboardUser(
-        id: 'sample9',
-        rank: 9,
-        name: 'Max',
-        avatar: '👨',
-        points: 480,
-        streak: 2,
-        lessonsCompleted: 18,
-        isCurrentUser: false,
-      ),
-      LeaderboardUser(
-        id: 'sample10',
-        rank: 10,
-        name: 'Zoe',
-        avatar: '👧',
-        points: 450,
-        streak: 1,
-        lessonsCompleted: 16,
-        isCurrentUser: false,
-      ),
-    ];
-
-  }
 
 
   @override
@@ -309,19 +223,24 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                 else if (_error != null && _leaderboardData.isEmpty)
                   _buildErrorSection()
                 else if (_leaderboardData.isEmpty)
-                  _buildEmptySection()
-                else ...[
-                  // Top 3 Podium
-                  _buildPodiumSection(),
-                  
-                  const SizedBox(height: 20),
-                  
-                  // Leaderboard list card
-                  _buildLeaderboardCard(),
-                  
-                  // Motivational card at bottom
-                  _buildMotivationalCard(),
-                ],
+                  _buildEmptyState()
+                else
+                  // Show the leaderboard structure
+                  Column(
+                    children: [
+                      if (_leaderboardData.length >= 3) ...[
+                        // Top 3 Podium
+                        _buildPodiumSection(),
+                        const SizedBox(height: 20),
+                      ],
+
+                      // Leaderboard list card
+                      _buildLeaderboardCard(),
+
+                      // Motivational card at bottom
+                      _buildMotivationalCard(),
+                    ],
+                  ),
                 
                 const SizedBox(height: 100),
               ],
@@ -408,17 +327,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     final top3 = _leaderboardData.take(3).toList();
     if (top3.isEmpty) return const SizedBox.shrink();
 
-    while (top3.length < 3) {
-      top3.add(LeaderboardUser(
-        id: 'placeholder_${top3.length}',
-        rank: top3.length + 1,
-        name: 'Empty',
-        avatar: '🎯',
-        points: 0,
-        streak: 0,
-        lessonsCompleted: 0,
-        isCurrentUser: false,
-      ));
+    // Only show actual users on the podium, don't add empty placeholders
+    if (top3.length < 3) {
+      // If we have fewer than 3 users, just show the ones we have
+      return _buildSimplifiedPodium(top3);
     }
 
     return Container(
@@ -464,9 +376,59 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     );
   }
 
+  Widget _buildSimplifiedPodium(List<LeaderboardUser> users) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          const Text(
+            '🏆 Top Champions 🏆',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF2C3E50),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: users.asMap().entries.map((entry) {
+              final index = entry.key;
+              final user = entry.value;
+              final colors = [
+                const Color(0xFFFFD700), // Gold
+                const Color(0xFFC0C0C0), // Silver
+                const Color(0xFFCD7F32), // Bronze
+              ];
+              final heights = [110.0, 85.0, 65.0];
+              return _buildPodiumPlace(
+                user,
+                index + 1,
+                heights[index],
+                colors[index]
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPodiumPlace(LeaderboardUser user, int position, double height, Color color) {
     String medal = position == 1 ? '👑' : (position == 2 ? '🥈' : '🥉');
-    bool isPlaceholder = user.name == 'Empty';
 
     return Expanded(
       child: Column(
@@ -507,20 +469,12 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                 ),
               ],
             ),
-            child: isPlaceholder
-                ? Container(
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(Icons.person_outline, color: Colors.grey.shade400, size: 32),
-                  )
-                : UserAvatar(
-                    avatar: user.avatar,
-                    size: 60,
-                    backgroundColor: Colors.white,
-                    showBorder: false,
-                  ),
+            child: UserAvatar(
+              avatar: user.avatar,
+              size: 60,
+              backgroundColor: Colors.white,
+              showBorder: false,
+            ),
           ),
           const SizedBox(height: 12),
 
@@ -552,35 +506,33 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                if (!isPlaceholder) ...[
-                  Text(
-                    user.name,
+                Text(
+                  user.name,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                    color: Colors.white,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '${user.points}',
                     style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
                       color: Colors.white,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      '${user.points}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                ],
+                ),
               ],
             ),
           ),
@@ -865,67 +817,45 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     );
   }
 
-  Widget _buildEmptySection() {
-    return Padding(
-      padding: const EdgeInsets.all(20),
+  Widget _buildEmptyState() {
+    return Container(
+      height: 300,
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.grey.shade200, width: 2),
+      ),
       child: Center(
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.grey.withValues(alpha: 0.1),
-                spreadRadius: 1,
-                blurRadius: 10,
-                offset: const Offset(0, 2),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.leaderboard_outlined,
+              size: 48,
+              color: Colors.grey.shade400,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'No ${selectedPeriod.toLowerCase()} champions yet',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: Colors.grey.shade600,
               ),
-            ],
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(
-                Icons.leaderboard_outlined,
-                size: 64,
-                color: Colors.grey,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Be the first to earn points!',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey.shade500,
               ),
-              const SizedBox(height: 16),
-              const Text(
-                'Be the first champion!',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Complete some math exercises to appear on the leaderboard',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey.shade600,
-                ),
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: () => Navigator.of(context).pop(),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF5B9EF7),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                ),
-                child: const Text('Start Practicing'),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
+
 }

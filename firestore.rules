@@ -6,28 +6,87 @@ service cloud.firestore {
     function isAuthenticated() {
       return request.auth != null;
     }
-    
+
     function isOwner(userId) {
       return request.auth != null && request.auth.uid == userId;
     }
 
+    function validateUserData() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['uid', 'name']) &&
+             data.uid == request.auth.uid &&
+             data.name is string &&
+             data.name.size() > 0 &&
+             ((!('age' in data)) || (data.age is int && data.age >= 3 && data.age <= 18)) &&
+             ((!('email' in data)) || (data.email is string)) &&
+             ((!('avatar' in data)) || (data.avatar is string)) &&
+             ((!('gradeLevel' in data)) || (data.gradeLevel is string)) &&
+             ((!('school' in data)) || (data.school is string)) &&
+             ((!('bio' in data)) || (data.bio is string));
+    }
+
+    function validateProgressData() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['topicId', 'difficulty']) &&
+             data.topicId is string &&
+             data.difficulty is string &&
+             ((!('bestScore' in data)) || (data.bestScore is int && data.bestScore >= 0)) &&
+             ((!('bestAccuracy' in data)) || (data.bestAccuracy is number && data.bestAccuracy >= 0 && data.bestAccuracy <= 1)) &&
+             ((!('totalAttempts' in data)) || (data.totalAttempts is int && data.totalAttempts >= 0)) &&
+             ((!('isPerfectScore' in data)) || (data.isPerfectScore is bool));
+    }
+
+    function validateSessionData() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['topicId', 'difficulty', 'accuracy', 'score']) &&
+             data.topicId is string &&
+             data.difficulty is string &&
+             data.accuracy is number && data.accuracy >= 0 && data.accuracy <= 1 &&
+             data.score is int && data.score >= 0 &&
+             ((!('totalQuestions' in data)) || (data.totalQuestions is int && data.totalQuestions > 0)) &&
+             ((!('correctAnswers' in data)) || (data.correctAnswers is int && data.correctAnswers >= 0)) &&
+             ((!('timeSpentSeconds' in data)) || (data.timeSpentSeconds is int && data.timeSpentSeconds >= 0)) &&
+             ((!('userId' in data)) || (data.userId == request.auth.uid));
+    }
+
+    // Default: Deny all access unless explicitly allowed
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
     // Users collection - Enhanced for leaderboard system
     match /users/{userId} {
-      // Read: Users can read their own data OR authenticated users can read leaderboard data from others
-      allow read: if isAuthenticated() && (isOwner(userId) || true); // Allow reading for leaderboards
-      
-      // Write: Users can only write to their own profile
-      allow write: if isAuthenticated() && isOwner(userId);
-      
+      // Read: Users can read their own data OR any authenticated user can read basic profile data
+      allow read: if isAuthenticated(); // Allow all authenticated users to read user profiles for friends/leaderboard
+
+      // Write: Users can only write to their own profile with validation
+      allow create: if isAuthenticated() && isOwner(userId) && validateUserData();
+      allow update: if isAuthenticated() && isOwner(userId);
+      allow delete: if isAuthenticated() && isOwner(userId);
+
+      // Lesson progress subcollection (NEW)
+      match /lesson_progress/{progressId} {
+        allow read, write: if isAuthenticated() && isOwner(userId);
+        allow create, update: if isAuthenticated() && isOwner(userId) && validateProgressData();
+      }
+
+      // Lesson sessions subcollection (NEW)
+      match /lesson_sessions/{sessionId} {
+        allow read: if isAuthenticated(); // Allow leaderboard queries
+        allow write: if isAuthenticated() && isOwner(userId);
+        allow create: if isAuthenticated() && isOwner(userId) && validateSessionData();
+        allow update: if isAuthenticated() && isOwner(userId) && validateSessionData();
+      }
+
       // Practice sessions subcollection
       match /practice_sessions/{sessionId} {
-        allow read, write: if isAuthenticated() && isOwner(userId);
+        allow read: if isAuthenticated(); // Allow leaderboard queries
+        allow write: if isAuthenticated() && isOwner(userId);
       }
 
       // User achievements subcollection
       match /achievements/{achievementId} {
-        allow read: if isAuthenticated() && isOwner(userId);
-        allow write: if isAuthenticated() && isOwner(userId);
+        allow read, write: if isAuthenticated() && isOwner(userId);
       }
 
       // Topic progress subcollection
@@ -49,24 +108,75 @@ service cloud.firestore {
     // Achievements - read only for authenticated users
     match /achievements/{achievementId} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated(); // Allow write for manual setup
+      allow write: if false; // Prevent manual manipulation
     }
 
     // App config - read only for authenticated users
     match /app_config/{configId} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated(); // Allow write for manual setup
+      allow write: if false; // Prevent unauthorized changes
     }
 
     // Leaderboards - read only for authenticated users
     match /leaderboards/{leaderboardId} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated(); // Allow write for manual setup
+      allow write: if false; // Prevent manual manipulation
     }
 
-    // Temporary: Allow all operations for authenticated users during setup
-    match /{document=**} {
-      allow read, write: if isAuthenticated();
+    // Duels - real-time multiplayer games (New system)
+    match /duels/{gameId} {
+      // Read: Allow authenticated users to read waiting games for matchmaking,
+      // and games they're participating in
+      allow read: if isAuthenticated() &&
+        (resource == null || // Allow reading for queries
+         resource.data.state == 'waiting' || // Allow reading waiting games for matchmaking
+         (resource.data.players != null &&
+          (resource.data.players.player1.userId == request.auth.uid ||
+           resource.data.players.player2.userId == request.auth.uid)));
+
+      // Create: Allow authenticated users to create new games
+      allow create: if isAuthenticated() &&
+        request.resource.data.players.player1.userId == request.auth.uid;
+
+      // Update: Allow players to update their own player data and game progress
+      allow update: if isAuthenticated() &&
+        (resource.data.players.player1.userId == request.auth.uid ||
+         (resource.data.players.player2 != null && resource.data.players.player2.userId == request.auth.uid) ||
+         (resource.data.state == 'waiting' && request.auth.uid != null) ||
+         (resource.data.isBot == true && resource.data.players.player1.userId == request.auth.uid));
+
+      // Delete: Allow game creator to delete waiting games
+      allow delete: if isAuthenticated() &&
+        resource.data.players.player1.userId == request.auth.uid &&
+        resource.data.state == 'waiting';
+    }
+
+    // Legacy Quiz Duels - keep for backward compatibility
+    match /quiz_duels/{gameId} {
+      // Read: Allow authenticated users to read all waiting games for matchmaking,
+      // and games they're participating in
+      allow read: if isAuthenticated() &&
+        (resource == null || // Allow reading for queries
+         resource.data.status == 'waiting' || // Allow reading waiting games for matchmaking
+         resource.data.players.player1 == request.auth.uid ||
+         resource.data.players.player2 == request.auth.uid);
+
+      // Create: Allow authenticated users to create new games
+      allow create: if isAuthenticated() &&
+        request.resource.data.players.player1 == request.auth.uid;
+
+      // Update: Allow players to update their own player data and game progress
+      allow update: if isAuthenticated() &&
+        (resource.data.players.player1 == request.auth.uid ||
+         resource.data.players.player2 == request.auth.uid ||
+         (resource.data.status == 'waiting' && request.auth.uid != null)) &&
+        // Ensure only valid game state transitions
+        (request.resource.data.status in ['waiting', 'active', 'finished', 'cancelled']);
+
+      // Delete: Allow game creator to delete waiting games
+      allow delete: if isAuthenticated() &&
+        resource.data.players.player1 == request.auth.uid &&
+        resource.data.status == 'waiting';
     }
   }
 }

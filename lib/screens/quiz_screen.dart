@@ -3,6 +3,7 @@ import '../services/firestore_service.dart';
 import '../services/friends_service.dart';
 import '../widgets/user_avatar.dart';
 import 'friends_screen.dart';
+import 'quiz_duel_screen.dart';
 
 class QuizScreen extends StatefulWidget {
   const QuizScreen({super.key});
@@ -322,7 +323,7 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
           title: 'Quick Match',
           subtitle: 'Find an opponent instantly',
           color: const Color(0xFF7ED321),
-          onTap: () => _showComingSoonDialog('Quick Match'),
+          onTap: () => _showQuickMatchDialog(),
         ),
         const SizedBox(height: 12),
 
@@ -332,7 +333,7 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
           title: 'Challenge Friend',
           subtitle: 'Invite a friend to battle',
           color: const Color(0xFF5B9EF3),
-          onTap: () => _showFriendChallengeDialog(),
+          onTap: () => _showQuickMatchDialog(),
         ),
         const SizedBox(height: 12),
 
@@ -678,7 +679,7 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
                     subtitle: 'Challenge a random player',
                     onTap: () {
                       Navigator.pop(context);
-                      _showComingSoonDialog('Quick Challenge');
+                      _showQuickMatchDialog();
                     },
                   ),
                   _buildDrawerItem(
@@ -782,10 +783,247 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
     );
   }
 
-  void _showFriendChallengeDialog() {
+  void _showQuickMatchDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        String selectedDifficulty = 'easy';
+        String selectedOperator = '+';
+
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              title: Row(
+                children: [
+                  Icon(Icons.flash_on, color: Color(0xFF7ED321)),
+                  SizedBox(width: 8),
+                  Text(
+                    'Quick Match',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF2C3E50),
+                    ),
+                  ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Choose your challenge level:',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF2C3E50),
+                    ),
+                  ),
+                  SizedBox(height: 15),
+
+                  // Difficulty Selection
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey[300]!),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      children: [
+                        _buildDifficultyOption(
+                          'easy', 'Easy', '1-10 numbers', Color(0xFF7ED321),
+                          selectedDifficulty, (value) => setState(() => selectedDifficulty = value)
+                        ),
+                        Divider(height: 1),
+                        _buildDifficultyOption(
+                          'medium', 'Medium', '10-100 numbers', Color(0xFFFFA500),
+                          selectedDifficulty, (value) => setState(() => selectedDifficulty = value)
+                        ),
+                        Divider(height: 1),
+                        _buildDifficultyOption(
+                          'hard', 'Hard', '100+ numbers', Color(0xFFFF6B6B),
+                          selectedDifficulty, (value) => setState(() => selectedDifficulty = value)
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  SizedBox(height: 20),
+
+                  Text(
+                    'Choose operation:',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF2C3E50),
+                    ),
+                  ),
+                  SizedBox(height: 15),
+
+                  // Operation Selection
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _buildOperatorButton('+', selectedOperator, (op) => setState(() => selectedOperator = op)),
+                      _buildOperatorButton('-', selectedOperator, (op) => setState(() => selectedOperator = op)),
+                      _buildOperatorButton('×', selectedOperator, (op) => setState(() => selectedOperator = op)),
+                      _buildOperatorButton('÷', selectedOperator, (op) => setState(() => selectedOperator = op)),
+                    ],
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(
+                    'Cancel',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _startQuizDuel(selectedDifficulty, selectedOperator);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Color(0xFF7ED321),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.flash_on, color: Colors.white, size: 18),
+                      SizedBox(width: 8),
+                      Text(
+                        'Start Duel',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildDifficultyOption(
+    String value,
+    String title,
+    String description,
+    Color color,
+    String selectedValue,
+    Function(String) onChanged,
+  ) {
+    final isSelected = selectedValue == value;
+    return InkWell(
+      onTap: () => onChanged(value),
+      child: Container(
+        padding: EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Container(
+              width: 20,
+              height: 20,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isSelected ? color : Colors.grey[400]!,
+                  width: 2,
+                ),
+                color: isSelected ? color : Colors.transparent,
+              ),
+              child: isSelected
+                  ? Icon(Icons.check, color: Colors.white, size: 14)
+                  : null,
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: isSelected ? color : Color(0xFF2C3E50),
+                    ),
+                  ),
+                  Text(
+                    description,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOperatorButton(String operator, String selectedOperator, Function(String) onChanged) {
+    final isSelected = selectedOperator == operator;
+    Color operatorColor;
+    switch (operator) {
+      case '+': operatorColor = Color(0xFF6C5CE7); break;
+      case '-': operatorColor = Color(0xFFE84393); break;
+      case '×': operatorColor = Color(0xFF00B894); break;
+      case '÷': operatorColor = Color(0xFFE17055); break;
+      default: operatorColor = Color(0xFF5B9EF3);
+    }
+
+    return GestureDetector(
+      onTap: () => onChanged(operator),
+      child: Container(
+        width: 50,
+        height: 50,
+        decoration: BoxDecoration(
+          color: isSelected ? operatorColor : Colors.grey[100],
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? operatorColor : Colors.grey[300]!,
+            width: 2,
+          ),
+        ),
+        child: Center(
+          child: Text(
+            operator,
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: isSelected ? Colors.white : operatorColor,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _startQuizDuel(String difficulty, String operator) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const FriendsScreen()),
+      MaterialPageRoute(
+        builder: (context) => QuizDuelScreen(
+          topicName: 'Arithmetic',
+          operator: operator,
+          difficulty: difficulty,
+        ),
+      ),
     );
   }
 

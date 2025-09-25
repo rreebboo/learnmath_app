@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 
 class DatabaseService {
   // Use lazy initialization to avoid accessing Firebase before it's initialized
@@ -16,14 +17,13 @@ class DatabaseService {
   // Initialize database collections and indexes
   Future<void> initializeDatabase() async {
     try {
-      print('DatabaseService: Starting database initialization...');
-      
       // Check if Firebase is available
       try {
         await _firestore.settings;
-        print('DatabaseService: Firestore connection verified');
       } catch (e) {
-        print('DatabaseService: Firestore not available: $e');
+        if (kDebugMode) {
+          print('Firestore not available: $e');
+        }
         return; // Skip database initialization if Firestore is not available
       }
       
@@ -33,10 +33,13 @@ class DatabaseService {
       // Initialize sample achievements if none exist
       await _initializeAchievements();
       
-      print('DatabaseService: Database initialized successfully');
+      if (kDebugMode) {
+        print('Database initialized successfully');
+      }
     } catch (e) {
-      print('DatabaseService: Error initializing database: $e');
-      print('DatabaseService: Error type: ${e.runtimeType}');
+      if (kDebugMode) {
+        print('Database initialization error: $e');
+      }
       // Don't rethrow - allow app to continue without database features
     }
   }
@@ -75,7 +78,9 @@ class DatabaseService {
         print('DatabaseService: App configuration created');
       }
     } catch (e) {
-      print('DatabaseService: Error initializing app config: $e');
+      if (kDebugMode) {
+        print('Error initializing app config: $e');
+      }
     }
   }
 
@@ -165,7 +170,9 @@ class DatabaseService {
         print('DatabaseService: ${achievements.length} achievements created');
       }
     } catch (e) {
-      print('DatabaseService: Error initializing achievements: $e');
+      if (kDebugMode) {
+        print('Error initializing achievements: $e');
+      }
     }
   }
 
@@ -222,7 +229,9 @@ class DatabaseService {
       await _firestore.collection('users').doc(userId).set(userData);
       print('DatabaseService: User created with leaderboard data: $userId');
     } catch (e) {
-      print('DatabaseService: Error creating user: $e');
+      if (kDebugMode) {
+        print('Error creating user: $e');
+      }
       rethrow;
     }
   }
@@ -282,7 +291,9 @@ class DatabaseService {
 
       print('DatabaseService: Practice session saved with leaderboard update');
     } catch (e) {
-      print('DatabaseService: Error saving practice session: $e');
+      if (kDebugMode) {
+        print('Error saving practice session: $e');
+      }
       rethrow;
     }
   }
@@ -304,7 +315,9 @@ class DatabaseService {
         });
       }
     } catch (e) {
-      print('DatabaseService: Error updating accuracy rate: $e');
+      if (kDebugMode) {
+        print('Error updating accuracy rate: $e');
+      }
     }
   }
 
@@ -356,7 +369,9 @@ class DatabaseService {
 
       print('DatabaseService: Leaderboard cache updated with ${leaderboardData.length} users');
     } catch (e) {
-      print('DatabaseService: Error updating leaderboard cache: $e');
+      if (kDebugMode) {
+        print('Error updating leaderboard cache: $e');
+      }
     }
   }
 
@@ -463,7 +478,9 @@ class DatabaseService {
         }
       }
     } catch (e) {
-      print('DatabaseService: Error checking achievements: $e');
+      if (kDebugMode) {
+        print('Error checking achievements: $e');
+      }
     }
   }
 

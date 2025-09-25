@@ -70,11 +70,13 @@ class ImageService {
       }
 
       // Create a unique file name
-      final String fileName = 'profile_${refreshedUser.uid}_${DateTime.now().millisecondsSinceEpoch}${path.extension(imageFile.path)}';
+      final String fileName = 'profile_${DateTime.now().millisecondsSinceEpoch}${path.extension(imageFile.path)}';
 
-      // Create reference to Firebase Storage
+      // Create reference to Firebase Storage with user-specific directory structure
       final Reference ref = _storage
           .ref()
+          .child('users')
+          .child(refreshedUser.uid)
           .child('profile_images')
           .child(fileName);
 
@@ -133,5 +135,123 @@ class ImageService {
   // Check if string is an image URL (vs emoji)
   bool isImageUrl(String avatar) {
     return avatar.startsWith('http://') || avatar.startsWith('https://');
+  }
+
+  // Get user's storage directory reference
+  Reference? getUserStorageRef() {
+    final user = _auth.currentUser;
+    if (user == null) return null;
+
+    return _storage
+        .ref()
+        .child('users')
+        .child(user.uid);
+  }
+
+  // Upload lesson-related files (if needed in the future)
+  Future<String> uploadLessonFile(XFile file, String lessonId) async {
+    try {
+      if (!_isFirebaseInitialized) {
+        throw 'Firebase is not initialized';
+      }
+
+      final user = _auth.currentUser;
+      if (user == null) {
+        throw 'No user logged in';
+      }
+
+      // Create a unique file name
+      final String fileName = 'lesson_${lessonId}_${DateTime.now().millisecondsSinceEpoch}${path.extension(file.path)}';
+
+      // Create reference to Firebase Storage with user-specific directory structure
+      final Reference ref = _storage
+          .ref()
+          .child('users')
+          .child(user.uid)
+          .child('lesson_files')
+          .child(fileName);
+
+      // Set metadata
+      final SettableMetadata metadata = SettableMetadata(
+        customMetadata: {
+          'uploadedBy': user.uid,
+          'uploadedAt': DateTime.now().toIso8601String(),
+          'lessonId': lessonId,
+        },
+      );
+
+      // Upload file
+      final UploadTask uploadTask = ref.putFile(File(file.path), metadata);
+      final TaskSnapshot snapshot = await uploadTask;
+      final String downloadUrl = await snapshot.ref.getDownloadURL();
+
+      return downloadUrl;
+    } catch (e) {
+      throw 'Error uploading lesson file: $e';
+    }
+  }
+
+  // Clean up all user files (for account deletion)
+  Future<void> deleteAllUserFiles() async {
+    try {
+      if (!_isFirebaseInitialized) {
+        print('Warning: Firebase not initialized, skipping file cleanup');
+        return;
+      }
+
+      final user = _auth.currentUser;
+      if (user == null) {
+        print('Warning: No user logged in, skipping file cleanup');
+        return;
+      }
+
+      final Reference userRef = _storage
+          .ref()
+          .child('users')
+          .child(user.uid);
+
+      // List all files in user's directory
+      final ListResult result = await userRef.listAll();
+
+      // Delete all files
+      for (Reference fileRef in result.items) {
+        try {
+          await fileRef.delete();
+        } catch (e) {
+          print('Warning: Could not delete file ${fileRef.name}: $e');
+        }
+      }
+
+      // Delete subdirectories recursively
+      for (Reference prefixRef in result.prefixes) {
+        await _deleteDirectoryRecursively(prefixRef);
+      }
+
+    } catch (e) {
+      print('Warning: Could not clean up user files: $e');
+    }
+  }
+
+  // Helper method to delete directory recursively
+  Future<void> _deleteDirectoryRecursively(Reference dirRef) async {
+    try {
+      final ListResult result = await dirRef.listAll();
+
+      // Delete all files in this directory
+      for (Reference fileRef in result.items) {
+        try {
+          await fileRef.delete();
+        } catch (e) {
+          print('Warning: Could not delete file ${fileRef.name}: $e');
+        }
+      }
+
+      // Delete subdirectories recursively
+      for (Reference prefixRef in result.prefixes) {
+        await _deleteDirectoryRecursively(prefixRef);
+      }
+    } catch (e) {
+      print('Warning: Could not delete directory ${dirRef.name}: $e');
+    }
   }
 }

@@ -40,7 +40,7 @@ class _ModernQuizScreenState extends State<ModernQuizScreen> with TickerProvider
   List<int> options = [];
   
   final int totalQuestions = 10;
-  late Stopwatch stopwatch;
+  Stopwatch? stopwatch;
   Timer? timer;
 
   @override
@@ -266,7 +266,7 @@ class _ModernQuizScreenState extends State<ModernQuizScreen> with TickerProvider
   }
 
   void _completeSession() {
-    stopwatch.stop();
+    stopwatch?.stop();
     timer?.cancel();
     
     // Show completion dialog
@@ -312,7 +312,7 @@ class _ModernQuizScreenState extends State<ModernQuizScreen> with TickerProvider
     _answerController.dispose();
     _progressController.dispose();
     timer?.cancel();
-    stopwatch.stop();
+    stopwatch?.stop();
     super.dispose();
   }
 
@@ -439,7 +439,7 @@ class _ModernQuizScreenState extends State<ModernQuizScreen> with TickerProvider
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  '${stopwatch.elapsed.inMinutes}:${(stopwatch.elapsed.inSeconds % 60).toString().padLeft(2, '0')}',
+                  '${(stopwatch?.elapsed.inMinutes ?? 0)}:${((stopwatch?.elapsed.inSeconds ?? 0) % 60).toString().padLeft(2, '0')}',
                   style: TextStyle(
                     color: _getOperatorColor(),
                     fontSize: 16,
@@ -937,7 +937,7 @@ class _ModernQuizScreenState extends State<ModernQuizScreen> with TickerProvider
                         style: const TextStyle(color: Colors.white, fontSize: 16),
                       ),
                       Text(
-                        '${stopwatch.elapsed.inMinutes}:${(stopwatch.elapsed.inSeconds % 60).toString().padLeft(2, '0')}',
+                        '${(stopwatch?.elapsed.inMinutes ?? 0)}:${((stopwatch?.elapsed.inSeconds ?? 0) % 60).toString().padLeft(2, '0')}',
                         style: TextStyle(
                           color: _getDifficultyColor(),
                           fontSize: 18,

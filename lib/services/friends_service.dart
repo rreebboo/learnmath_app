@@ -11,16 +11,6 @@ class FriendsService {
 
   String? get currentUserId {
     final user = _auth.currentUser;
-    print('FriendsService: Current user UID: ${user?.uid}');
-    print('FriendsService: Current user email: ${user?.email}');
-    print('FriendsService: Current user display name: ${user?.displayName}');
-    print('FriendsService: Current user isAnonymous: ${user?.isAnonymous}');
-    print('FriendsService: Current user emailVerified: ${user?.emailVerified}');
-    
-    if (user == null) {
-      print('FriendsService: ⚠️ WARNING - No authenticated user found!');
-    }
-    
     return user?.uid;
   }
 

@@ -1,5 +1,6 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'database_service.dart';
 import 'leaderboard_service.dart';
 import '../firebase_options.dart';
@@ -10,7 +11,7 @@ class AppInitializationService {
   AppInitializationService._internal();
 
   final DatabaseService _databaseService = DatabaseService();
-  final LeaderboardService _leaderboardService = LeaderboardService();
+  final LeaderboardService _leaderboardService = LeaderboardService.instance;
   
   bool _isInitialized = false;
   bool get isInitialized => _isInitialized;
@@ -18,37 +19,27 @@ class AppInitializationService {
   // Initialize the entire application
   Future<void> initializeApp() async {
     try {
-      print('AppInitializationService: Starting app initialization...');
-      
       // Check if Firebase is already initialized
-      if (Firebase.apps.isNotEmpty) {
-        print('AppInitializationService: Firebase already initialized');
-      } else {
+      if (Firebase.apps.isEmpty) {
         // Initialize Firebase
         await Firebase.initializeApp(
           options: DefaultFirebaseOptions.currentPlatform,
         );
-        print('AppInitializationService: Firebase initialized successfully');
       }
-
-      // Verify Firebase is working
-      final app = Firebase.app();
-      print('AppInitializationService: Firebase app name: ${app.name}');
 
       // Initialize basic database structure (without heavy leaderboard setup)
       await _databaseService.initializeDatabase();
-      print('AppInitializationService: Basic database initialized');
 
       // Set up periodic leaderboard cache updates
       await _setupPeriodicUpdates();
-      
+
       _isInitialized = true;
-      print('AppInitializationService: App initialization completed successfully');
+      print('LearnMath app initialized successfully');
       
     } catch (e) {
-      print('AppInitializationService: Error during initialization: $e');
-      print('AppInitializationService: Error type: ${e.runtimeType}');
-      
+      if (kDebugMode) {
+        print('App initialization error: $e');
+      }
       // Don't rethrow - allow app to continue with fallback behavior
       _isInitialized = false;
     }
@@ -61,27 +52,26 @@ class AppInitializationService {
       final currentUser = FirebaseAuth.instance.currentUser;
       if (currentUser != null) {
         await _databaseService.updateLeaderboardCache();
-        print('AppInitializationService: Initial leaderboard cache updated');
       }
     } catch (e) {
-      print('AppInitializationService: Error setting up periodic updates: $e');
+      if (kDebugMode) {
+        print('Periodic updates error: $e');
+      }
     }
   }
 
   // Initialize user-specific data when user logs in
   Future<void> initializeUserData(String userId) async {
     try {
-      print('AppInitializationService: Initializing user data for: $userId');
-      
       // Check and award any pending achievements
       await _databaseService.checkAndAwardAchievements(userId);
-      
+
       // Update leaderboard position
       await _leaderboardService.updateUserLeaderboardPosition(userId);
-      
-      print('AppInitializationService: User data initialization completed');
     } catch (e) {
-      print('AppInitializationService: Error initializing user data: $e');
+      if (kDebugMode) {
+        print('User data initialization error: $e');
+      }
     }
   }
 

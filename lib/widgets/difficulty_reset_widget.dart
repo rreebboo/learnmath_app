@@ -174,7 +174,7 @@ class _DifficultyResetWidgetState extends State<DifficultyResetWidget> {
               final isSelected = _selectedNewDifficulty == index;
               final isCurrent = _currentDifficulty == index;
               
-              return RadioListTile<int>(
+              return ListTile(
                 title: Text(
                   _resetService.getDifficultyString(index).toUpperCase(),
                   style: TextStyle(
@@ -185,14 +185,19 @@ class _DifficultyResetWidgetState extends State<DifficultyResetWidget> {
                 subtitle: Text(
                   _resetService.getDifficultyDescription(index),
                 ),
-                value: index,
-                groupValue: _selectedNewDifficulty,
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() => _selectedNewDifficulty = value);
-                  }
-                },
+                leading: Radio<int>(
+                  value: index,
+                  groupValue: _selectedNewDifficulty,
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() => _selectedNewDifficulty = value);
+                    }
+                  },
+                ),
                 selected: isSelected,
+                onTap: () {
+                  setState(() => _selectedNewDifficulty = index);
+                },
               );
             }),
           ],

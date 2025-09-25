@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'practice_screen.dart';
 import 'adaptive_quiz_screen.dart';
 import 'leaderboard_screen.dart';
@@ -34,6 +36,7 @@ class _HomeContentState extends State<HomeContent> with TickerProviderStateMixin
     _initializeAnimations();
     _setupRealtimeUserData();
     _loadSelectedDifficulty();
+    _cleanupDebugDataIfNeeded();
   }
 
   void _initializeAnimations() {
@@ -129,57 +132,71 @@ class _HomeContentState extends State<HomeContent> with TickerProviderStateMixin
               children: [
                 // Header
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      children: [
-                        UserAvatar(
-                          avatar: _userData?['avatar'] ?? '🦊',
-                          size: 40,
-                          gradientColors: const [Color(0xFF7ED321), Color(0xFF9ACD32)],
-                        ),
-                        const SizedBox(width: 8),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
+                    // Left side - User info (flexible)
+                    Expanded(
+                      flex: 3,
+                      child: Row(
+                        children: [
+                          UserAvatar(
+                            avatar: _userData?['avatar'] ?? '🦊',
+                            size: 40,
+                            gradientColors: const [Color(0xFF7ED321), Color(0xFF9ACD32)],
+                          ),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  'Hi ${_userData?['name'] ?? 'Emma'}! ',
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF2C3E50),
-                                  ),
+                                Row(
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        'Hi ${_userData?['name'] ?? 'Emma'}! ',
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF2C3E50),
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    const Text(
+                                      '👋',
+                                      style: TextStyle(fontSize: 16),
+                                    ),
+                                  ],
                                 ),
-                                const Text(
-                                  '👋',
-                                  style: TextStyle(fontSize: 16),
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.star,
+                                      size: 14,
+                                      color: Colors.amber,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Flexible(
+                                      child: Text(
+                                        '${_userData?['totalScore'] ?? _userData?['stars'] ?? 248} XP',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey[600],
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
-                            Row(
-                              children: [
-                                const Icon(
-                                  Icons.star,
-                                  size: 14,
-                                  color: Colors.amber,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '${_userData?['totalScore'] ?? _userData?['stars'] ?? 248} XP',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey[600],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ],
+                          ),
+                        ],
+                      ),
                     ),
+                    const SizedBox(width: 8),
+                    // Right side - Actions (fixed width)
                     Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         GestureDetector(
                           onTap: () {
@@ -205,12 +222,13 @@ class _HomeContentState extends State<HomeContent> with TickerProviderStateMixin
                         ),
                         const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                           decoration: BoxDecoration(
                             color: const Color(0xFFFFE4B5),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               const Icon(
                                 Icons.local_fire_department,
@@ -219,12 +237,13 @@ class _HomeContentState extends State<HomeContent> with TickerProviderStateMixin
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                '${_userData?['currentStreak'] ?? _userData?['streak'] ?? 7} Day Streak!',
+                                '${_userData?['currentStreak'] ?? _userData?['streak'] ?? 7} Day${(_userData?['currentStreak'] ?? _userData?['streak'] ?? 7) == 1 ? '' : 's'}!',
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
                                   color: Colors.orange[700],
                                 ),
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ],
                           ),
@@ -833,6 +852,83 @@ class _HomeContentState extends State<HomeContent> with TickerProviderStateMixin
         ),
       ],
     );
+  }
+
+  // Clean up debug data automatically
+  Future<void> _cleanupDebugDataIfNeeded() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      // Check if user has debug test data
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      if (userDoc.exists) {
+        final userData = userDoc.data() as Map<String, dynamic>;
+        final currentName = userData['name'] as String?;
+        bool needsCleanup = false;
+
+        // Check for debug test data
+        if (currentName != null && currentName.contains('Debug Test User')) {
+          needsCleanup = true;
+        }
+
+        if (userData.containsKey('testField')) {
+          needsCleanup = true;
+        }
+
+        if (needsCleanup) {
+          print('🧹 Auto-cleaning debug data...');
+
+          // Reset user name to proper value
+          if (currentName != null && currentName.contains('Debug Test User')) {
+            await FirebaseFirestore.instance
+                .collection('users')
+                .doc(user.uid)
+                .update({
+              'name': user.displayName ?? user.email?.split('@')[0] ?? 'User',
+            });
+          }
+
+          // Remove debug test field
+          if (userData.containsKey('testField')) {
+            await FirebaseFirestore.instance
+                .collection('users')
+                .doc(user.uid)
+                .update({
+              'testField': FieldValue.delete(),
+            });
+          }
+
+          // Remove debug test from lesson_progress
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .collection('lesson_progress')
+              .doc('debug_test')
+              .delete()
+              .catchError((e) => null); // Ignore if doesn't exist
+
+          // Remove debug test file from Storage
+          await FirebaseStorage.instance
+              .ref()
+              .child('users')
+              .child(user.uid)
+              .child('debug')
+              .child('test.txt')
+              .delete()
+              .catchError((e) => null); // Ignore if doesn't exist
+
+          print('✅ Debug data cleaned automatically');
+        }
+      }
+    } catch (e) {
+      // Ignore cleanup errors - don't affect user experience
+      print('ℹ️ Debug cleanup completed');
+    }
   }
 
 }

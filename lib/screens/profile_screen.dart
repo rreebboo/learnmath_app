@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'login_screen.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
-import '../services/progression_service.dart';
 import '../services/image_service.dart';
 import '../widgets/difficulty_reset_widget.dart';
 import '../widgets/user_avatar.dart';
@@ -595,39 +594,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  RadioListTile<String>(
+                  ListTile(
                     title: Text('Easy'),
                     subtitle: Text('1-digit numbers'),
-                    value: 'Easy',
-                    groupValue: selectedDifficulty,
-                    activeColor: Color(0xFF7ED321),
-                    onChanged: (value) {
+                    leading: Radio<String>(
+                      value: 'Easy',
+                      activeColor: Color(0xFF7ED321),
+                      groupValue: selectedDifficulty,
+                      onChanged: (value) {
+                        setDialogState(() {
+                          selectedDifficulty = value!;
+                        });
+                      },
+                    ),
+                    onTap: () {
                       setDialogState(() {
-                        selectedDifficulty = value!;
+                        selectedDifficulty = 'Easy';
                       });
                     },
                   ),
-                  RadioListTile<String>(
+                  ListTile(
                     title: Text('Medium'),
                     subtitle: Text('2-3 digit numbers'),
-                    value: 'Medium',
-                    groupValue: selectedDifficulty,
-                    activeColor: Color(0xFFFFA500),
-                    onChanged: (value) {
+                    leading: Radio<String>(
+                      value: 'Medium',
+                      activeColor: Color(0xFFFFA500),
+                      groupValue: selectedDifficulty,
+                      onChanged: (value) {
+                        setDialogState(() {
+                          selectedDifficulty = value!;
+                        });
+                      },
+                    ),
+                    onTap: () {
                       setDialogState(() {
-                        selectedDifficulty = value!;
+                        selectedDifficulty = 'Medium';
                       });
                     },
                   ),
-                  RadioListTile<String>(
+                  ListTile(
                     title: Text('Hard'),
                     subtitle: Text('4+ digit numbers'),
-                    value: 'Hard',
-                    groupValue: selectedDifficulty,
-                    activeColor: Color(0xFFFF6B6B),
-                    onChanged: (value) {
+                    leading: Radio<String>(
+                      value: 'Hard',
+                      activeColor: Color(0xFFFF6B6B),
+                      groupValue: selectedDifficulty,
+                      onChanged: (value) {
+                        setDialogState(() {
+                          selectedDifficulty = value!;
+                        });
+                      },
+                    ),
+                    onTap: () {
                       setDialogState(() {
-                        selectedDifficulty = value!;
+                        selectedDifficulty = 'Hard';
                       });
                     },
                   ),
@@ -730,25 +750,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 onTap: () {
                   Navigator.pop(context);
                   _showDifficultyResetDialog();
-                },
-              ),
-              ListTile(
-                leading: Container(
-                  padding: EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.purple.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(
-                    Icons.restart_alt,
-                    color: Colors.purple,
-                  ),
-                ),
-                title: Text('Reset Progress'),
-                subtitle: Text('Start math lessons from the beginning'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _showProgressResetDialog();
                 },
               ),
               ListTile(
@@ -1367,159 +1368,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  void _showProgressResetDialog() async {
-    final progressionService = ProgressionService.instance;
-    
-    // Check if user has any progress first
-    bool hasProgress = await progressionService.hasAnyProgress();
-    
-    if (!hasProgress) {
-      // Show info that no progress exists to reset
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (BuildContext context) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              title: Row(
-                children: [
-                  Icon(Icons.info_outline, color: Color(0xFF5B9EF3)),
-                  SizedBox(width: 8),
-                  Text('No Progress Found'),
-                ],
-              ),
-              content: Text(
-                'You haven\'t made any progress yet! Start with Addition to begin your math journey.',
-                style: TextStyle(fontSize: 16),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: Text(
-                    'OK',
-                    style: TextStyle(
-                      color: Color(0xFF5B9EF3),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            );
-          },
-        );
-      }
-      return;
-    }
-
-    // Show confirmation dialog
-    if (mounted) {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (BuildContext context) {
-          return AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            title: Row(
-              children: [
-                Icon(Icons.warning_amber_rounded, color: Colors.orange),
-                SizedBox(width: 8),
-                Text('Reset Progress?'),
-              ],
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'This will:',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-                ),
-                SizedBox(height: 8),
-                Text('• Remove all perfect scores'),
-                Text('• Lock all topics except Addition'),
-                Text('• Reset all stars and progress'),
-                SizedBox(height: 12),
-                Text(
-                  'This action cannot be undone!',
-                  style: TextStyle(
-                    color: Colors.red,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: Text(
-                  'Cancel',
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                child: Text(
-                  'Reset Progress',
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ),
-            ],
-          );
-        },
-      );
-
-      if (confirmed == true) {
-        try {
-          // Reset the progression
-          await progressionService.resetToBeginning();
-          
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Row(
-                  children: [
-                    Icon(Icons.check_circle, color: Colors.white),
-                    SizedBox(width: 8),
-                    Text('Progress reset successfully! You can start fresh.'),
-                  ],
-                ),
-                backgroundColor: Colors.green,
-                duration: Duration(seconds: 3),
-              ),
-            );
-          }
-        } catch (e) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Row(
-                  children: [
-                    Icon(Icons.error, color: Colors.white),
-                    SizedBox(width: 8),
-                    Text('Failed to reset progress. Please try again.'),
-                  ],
-                ),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-        }
-      }
-    }
-  }
 }
 
 // Custom Wave Painter for the header design

@@ -70,7 +70,7 @@ class WeeklyProgress extends StatelessWidget {
           width: 40,
           height: 40,
           decoration: BoxDecoration(
-            color: status == DayStatus.future ? color.withOpacity(0.3) : color,
+            color: status == DayStatus.future ? color.withValues(alpha: 0.3) : color,
             shape: BoxShape.circle,
           ),
           child: Center(child: child),

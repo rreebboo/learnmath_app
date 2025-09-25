@@ -10,6 +10,31 @@ set(BINARY_NAME "learnmath_app")
 # versions of CMake.
 cmake_policy(VERSION 3.14...3.25)
 
+# Suppress deprecation warnings from third-party dependencies like Firebase
+if(POLICY CMP0148)
+  cmake_policy(SET CMP0148 OLD)
+endif()
+set(CMAKE_WARN_DEPRECATED OFF CACHE BOOL "Whether to issue deprecation warnings." FORCE)
+
+# Suppress additional CMake deprecation warnings for minimum version
+if(POLICY CMP0000)
+  cmake_policy(SET CMP0000 OLD)
+endif()
+
+# Suppress PDB warnings from third-party libraries like Firebase
+if(WIN32)
+  # More comprehensive PDB warning suppression
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /ignore:4099")
+  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} /ignore:4099")
+  set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} /ignore:4099")
+
+  # Set linker flags for all configurations
+  foreach(config Debug Release Profile)
+    set(CMAKE_EXE_LINKER_FLAGS_${config} "${CMAKE_EXE_LINKER_FLAGS_${config}} /ignore:4099")
+    set(CMAKE_SHARED_LINKER_FLAGS_${config} "${CMAKE_SHARED_LINKER_FLAGS_${config}} /ignore:4099")
+  endforeach()
+endif()
+
 # Define build configuration option.
 get_property(IS_MULTICONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
 if(IS_MULTICONFIG)

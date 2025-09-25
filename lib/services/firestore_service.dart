@@ -70,6 +70,8 @@ class FirestoreService {
           'soundEnabled': true,
           'difficulty': 'beginner',
         },
+        'unlockedTopics': ['addition'],
+        'perfectScores': {},
       });
       // print('FirestoreService: Default user document created');
     } catch (e) {

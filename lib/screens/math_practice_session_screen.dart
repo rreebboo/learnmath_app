@@ -25,7 +25,7 @@ class _MathPracticeSessionScreenState extends State<MathPracticeSessionScreen> {
   final AuthService _authService = AuthService();
   
   late List<MathQuestion> questions;
-  late Stopwatch stopwatch;
+  Stopwatch? stopwatch;
   Timer? timer;
   
   int currentQuestionIndex = 0;
@@ -91,7 +91,7 @@ class _MathPracticeSessionScreenState extends State<MathPracticeSessionScreen> {
   }
 
   void _completeSession() {
-    stopwatch.stop();
+    stopwatch?.stop();
     timer?.cancel();
     
     setState(() {
@@ -113,7 +113,7 @@ class _MathPracticeSessionScreenState extends State<MathPracticeSessionScreen> {
       return;
     }
 
-    final timeSpent = Duration(seconds: stopwatch.elapsed.inSeconds);
+    final timeSpent = Duration(seconds: stopwatch?.elapsed.inSeconds ?? 0);
     final accuracy = correctAnswers / questions.length;
     
     final stars = MathService.calculateStars(
@@ -156,7 +156,7 @@ class _MathPracticeSessionScreenState extends State<MathPracticeSessionScreen> {
   @override
   void dispose() {
     timer?.cancel();
-    stopwatch.stop();
+    stopwatch?.stop();
     super.dispose();
   }
 
@@ -202,7 +202,7 @@ class _MathPracticeSessionScreenState extends State<MathPracticeSessionScreen> {
                 ),
                 const SizedBox(width: 4),
                 Text(
-                  _formatTime(stopwatch.elapsed),
+                  _formatTime(stopwatch?.elapsed ?? Duration.zero),
                   style: const TextStyle(
                     color: Color(0xFF7ED321),
                     fontWeight: FontWeight.bold,
@@ -426,7 +426,7 @@ class _MathPracticeSessionScreenState extends State<MathPracticeSessionScreen> {
 
   Widget _buildCompletionScreen() {
     final accuracy = correctAnswers / questions.length;
-    final timeSpent = Duration(seconds: stopwatch.elapsed.inSeconds);
+    final timeSpent = Duration(seconds: stopwatch?.elapsed.inSeconds ?? 0);
     final stars = MathService.calculateStars(
       accuracy: accuracy,
       averageTime: Duration(seconds: timeSpent.inSeconds ~/ questions.length),

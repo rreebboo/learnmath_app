@@ -498,8 +498,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
                                   color: _passwordController.text == _confirmPasswordController.text 
-                                      ? Color(0xFF7ED321).withOpacity(0.3) 
-                                      : Colors.red.withOpacity(0.3),
+                                      ? Color(0xFF7ED321).withValues(alpha: 0.3)
+                                      : Colors.red.withValues(alpha: 0.3),
                                 ),
                               ),
                               child: Row(

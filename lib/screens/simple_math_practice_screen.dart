@@ -24,7 +24,7 @@ class SimpleMathPracticeScreen extends StatefulWidget {
 class _SimpleMathPracticeScreenState extends State<SimpleMathPracticeScreen> {
   final math.Random _random = math.Random();
   final UserStatisticsService _statsService = UserStatisticsService();
-  late Stopwatch stopwatch;
+  Stopwatch? stopwatch;
   Timer? timer;
   
   int currentQuestionIndex = 0;
@@ -44,13 +44,14 @@ class _SimpleMathPracticeScreenState extends State<SimpleMathPracticeScreen> {
   @override
   void initState() {
     super.initState();
+    stopwatch = Stopwatch();
     _initializeSession();
   }
 
   void _initializeSession() async {
     await _statsService.loadStatistics();
     _generateQuestion();
-    stopwatch = Stopwatch()..start();
+    stopwatch?.start();
     _startTimer();
   }
 
@@ -212,7 +213,7 @@ class _SimpleMathPracticeScreenState extends State<SimpleMathPracticeScreen> {
   }
 
   void _completeSession() async {
-    stopwatch.stop();
+    stopwatch?.stop();
     timer?.cancel();
     
     setState(() {
@@ -221,16 +222,17 @@ class _SimpleMathPracticeScreenState extends State<SimpleMathPracticeScreen> {
     
     // Record session statistics
     final accuracy = correctAnswers / totalQuestions;
-    final averageTime = stopwatch.elapsed.inSeconds / totalQuestions;
+    final elapsedTime = stopwatch?.elapsed ?? Duration.zero;
+    final averageTime = elapsedTime.inSeconds / totalQuestions;
     final stars = _calculateStars(accuracy, averageTime);
-    final score = _calculateScore(accuracy, stopwatch.elapsed);
+    final score = _calculateScore(accuracy, elapsedTime);
     
     await _statsService.recordSession(
       topic: widget.topicName,
       difficulty: widget.difficulty,
       questions: totalQuestions,
       correctAnswers: correctAnswers,
-      timeSpent: stopwatch.elapsed.inSeconds,
+      timeSpent: elapsedTime.inSeconds,
       stars: stars,
       score: score,
     );
@@ -244,7 +246,9 @@ class _SimpleMathPracticeScreenState extends State<SimpleMathPracticeScreen> {
   @override
   void dispose() {
     timer?.cancel();
-    stopwatch.stop();
+    if (stopwatch?.isRunning == true) {
+      stopwatch?.stop();
+    }
     super.dispose();
   }
 
@@ -301,7 +305,7 @@ class _SimpleMathPracticeScreenState extends State<SimpleMathPracticeScreen> {
                 ),
                 const SizedBox(width: 4),
                 Text(
-                  _formatTime(stopwatch.elapsed),
+                  _formatTime(stopwatch?.elapsed ?? Duration.zero),
                   style: const TextStyle(
                     color: Color(0xFF7ED321),
                     fontWeight: FontWeight.bold,
@@ -533,7 +537,7 @@ class _SimpleMathPracticeScreenState extends State<SimpleMathPracticeScreen> {
 
   Widget _buildCompletionScreen() {
     final accuracy = correctAnswers / totalQuestions;
-    final timeSpent = Duration(seconds: stopwatch.elapsed.inSeconds);
+    final timeSpent = Duration(seconds: stopwatch?.elapsed.inSeconds ?? 0);
     final averageTime = timeSpent.inSeconds / totalQuestions;
     
     // Difficulty-based scoring
@@ -760,7 +764,7 @@ class _SimpleMathPracticeScreenState extends State<SimpleMathPracticeScreen> {
   int _getAverageTime() {
     if (currentQuestionIndex == 0 && !hasAnswered) return 0;
     final questionsSoFar = currentQuestionIndex + (hasAnswered ? 1 : 0);
-    return questionsSoFar > 0 ? (stopwatch.elapsed.inSeconds / questionsSoFar).round() : 0;
+    return questionsSoFar > 0 ? ((stopwatch?.elapsed.inSeconds ?? 0) / questionsSoFar).round() : 0;
   }
 
   Widget _buildStatCard(String label, String value, String suffix, Color color, IconData icon) {
