@@ -3,15 +3,19 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'quiz_engine.dart';
 
 class QuizProgressService {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  // Lazy initialization to avoid Firebase access before initialization
+  FirebaseFirestore? _firestoreInstance;
+  FirebaseAuth? _authInstance;
+
+  FirebaseFirestore get firestore => _firestoreInstance ??= FirebaseFirestore.instance;
+  FirebaseAuth get auth => _authInstance ??= FirebaseAuth.instance;
 
   Future<void> saveQuizAttempt(QuizAttempt attempt) async {
     try {
-      final user = _auth.currentUser;
+      final user = auth.currentUser;
       if (user == null) return;
 
-      await _firestore
+      await firestore
           .collection('users')
           .doc(user.uid)
           .collection('quiz_attempts')
@@ -23,7 +27,7 @@ class QuizProgressService {
 
   Future<void> saveQuizSession(List<QuizAttempt> attempts, Map<String, dynamic> stats) async {
     try {
-      final user = _auth.currentUser;
+      final user = auth.currentUser;
       if (user == null) return;
 
       final sessionData = {
@@ -35,7 +39,7 @@ class QuizProgressService {
         'accuracy': attempts.isEmpty ? 0.0 : attempts.where((a) => a.isCorrect).length / attempts.length,
       };
 
-      await _firestore
+      await firestore
           .collection('users')
           .doc(user.uid)
           .collection('quiz_sessions')
@@ -49,12 +53,12 @@ class QuizProgressService {
 
   Future<void> _updateUserProgress(Map<String, dynamic> stats) async {
     try {
-      final user = _auth.currentUser;
+      final user = auth.currentUser;
       if (user == null) return;
 
-      final userRef = _firestore.collection('users').doc(user.uid);
+      final userRef = firestore.collection('users').doc(user.uid);
       
-      await _firestore.runTransaction((transaction) async {
+      await firestore.runTransaction((transaction) async {
         final userDoc = await transaction.get(userRef);
         final userData = userDoc.data() ?? {};
 
@@ -105,10 +109,10 @@ class QuizProgressService {
 
   Future<List<Map<String, dynamic>>> getQuizHistory({int limit = 10}) async {
     try {
-      final user = _auth.currentUser;
+      final user = auth.currentUser;
       if (user == null) return [];
 
-      final querySnapshot = await _firestore
+      final querySnapshot = await firestore
           .collection('users')
           .doc(user.uid)
           .collection('quiz_sessions')
@@ -128,10 +132,10 @@ class QuizProgressService {
 
   Future<Map<String, dynamic>?> getUserQuizStats() async {
     try {
-      final user = _auth.currentUser;
+      final user = auth.currentUser;
       if (user == null) return null;
 
-      final userDoc = await _firestore.collection('users').doc(user.uid).get();
+      final userDoc = await firestore.collection('users').doc(user.uid).get();
       final userData = userDoc.data();
       
       if (userData == null) return null;
@@ -150,12 +154,12 @@ class QuizProgressService {
   }
 
   Stream<List<Map<String, dynamic>>> getRecentQuizAttempts({int limit = 20}) {
-    final user = _auth.currentUser;
+    final user = auth.currentUser;
     if (user == null) {
       return Stream.value([]);
     }
 
-    return _firestore
+    return firestore
         .collection('users')
         .doc(user.uid)
         .collection('quiz_attempts')

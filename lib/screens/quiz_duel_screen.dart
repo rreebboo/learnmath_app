@@ -1396,11 +1396,11 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
-                        // Battle Arena - Flexible with min/max constraints
+                        // Battle Arena - Much larger sizing
                         Container(
                           constraints: BoxConstraints(
-                            minHeight: 140,
-                            maxHeight: (screenHeight * 0.3).clamp(140, 200),
+                            minHeight: 200,
+                            maxHeight: (screenHeight * 0.45).clamp(200, 320),
                           ),
                           child: Stack(
                             children: [
@@ -1424,11 +1424,11 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
 
                         const SizedBox(height: 16),
 
-                        // Question Section - Flexible with min/max constraints
+                        // Question Section - Much larger sizing
                         Container(
                           constraints: BoxConstraints(
-                            minHeight: 100,
-                            maxHeight: (screenHeight * 0.25).clamp(100, 160),
+                            minHeight: 150,
+                            maxHeight: (screenHeight * 0.35).clamp(150, 220),
                           ),
                           child: _buildQuestionSection(currentQuestion),
                         ).animate()
@@ -1437,11 +1437,11 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
 
                         const SizedBox(height: 16),
 
-                        // Answer Section - Flexible with aspect ratio preservation
+                        // Answer Section - Much larger sizing
                         Container(
                           constraints: BoxConstraints(
-                            minHeight: 120,
-                            maxHeight: (screenHeight * 0.35).clamp(120, 250),
+                            minHeight: 180,
+                            maxHeight: (screenHeight * 0.5).clamp(180, 350),
                           ),
                           child: _buildAnswersSection(currentQuestion),
                         ).animate()
@@ -1462,41 +1462,59 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
   }
 
   Widget _buildBattleHeader() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          bottom: BorderSide(color: const Color(0xFFE0E0E0)),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Flexible(
-            child: Text(
-              'Question ${_currentQuestionIndex + 1} / 10',
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF2C3E50),
-              ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Responsive design based on screen width
+        final screenWidth = constraints.maxWidth;
+        final isSmallScreen = screenWidth < 360;
+        final isMediumScreen = screenWidth < 400;
+
+        // Calculate responsive values
+        final leftPadding = isSmallScreen ? 72.0 : isMediumScreen ? 80.0 : 88.0;
+        final verticalPadding = isSmallScreen ? 14.0 : 16.0;
+        final fontSize = isSmallScreen ? 16.0 : isMediumScreen ? 17.0 : 18.0;
+        final timerFontSize = isSmallScreen ? 14.0 : 16.0;
+
+        return Container(
+          height: 64, // Fixed height to match back button area (16px top + 48px button height)
+          padding: EdgeInsets.fromLTRB(leftPadding, verticalPadding, 16, verticalPadding),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border(
+              bottom: BorderSide(color: const Color(0xFFE0E0E0)),
             ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Text(
+                  'Question ${_currentQuestionIndex + 1} / 10',
+                  style: TextStyle(
+                    fontSize: fontSize,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF2C3E50),
+                  ),
+                ),
+              ),
           PulseAnimation(
             isActive: _timeRemaining <= 5,
             duration: const Duration(milliseconds: 500),
             minScale: 0.9,
             maxScale: 1.1,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: EdgeInsets.symmetric(
+                horizontal: isSmallScreen ? 10 : 12,
+                vertical: isSmallScreen ? 4 : 6,
+              ),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: _timeRemaining <= 5
@@ -1518,13 +1536,13 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
                   Icon(
                     _timeRemaining <= 5 ? Icons.timer_off : Icons.timer,
                     color: Colors.white,
-                    size: 16,
+                    size: isSmallScreen ? 14 : 16,
                   ),
-                  const SizedBox(width: 4),
+                  SizedBox(width: isSmallScreen ? 3 : 4),
                   Text(
                     '${_timeRemaining}s',
-                    style: const TextStyle(
-                      fontSize: 14,
+                    style: TextStyle(
+                      fontSize: timerFontSize,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                     ),
@@ -1532,9 +1550,11 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
                 ],
               ),
             ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -1547,16 +1567,16 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
     final isDraw = currentUserScore == opponentScore;
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      padding: const EdgeInsets.all(8),
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -1575,7 +1595,7 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
             child: const Text(
               '🎮 BATTLE ARENA',
               style: TextStyle(
-                fontSize: 14,
+                fontSize: 16,
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
                 letterSpacing: 0.8,
@@ -1610,9 +1630,9 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // Animated battle icon - Smaller
+                        // Animated battle icon - Larger
                         Container(
-                          padding: const EdgeInsets.all(8),
+                          padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
                               colors: isDraw
@@ -1642,7 +1662,7 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
                                     ? Icons.trending_up
                                     : Icons.trending_down,
                             color: Colors.white,
-                            size: 18,
+                            size: 24,
                           ),
                         ).animate(onPlay: (controller) => controller.repeat())
                           .scale(duration: 1500.ms, begin: const Offset(0.9, 0.9), end: const Offset(1.1, 1.1))
@@ -1662,7 +1682,7 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
                           child: const Text(
                             'VS',
                             style: TextStyle(
-                              fontSize: 10,
+                              fontSize: 14,
                               fontWeight: FontWeight.w900,
                               color: Color(0xFF2C3E50),
                               letterSpacing: 1.0,
@@ -1684,7 +1704,7 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
                           child: Text(
                             '$currentUserScore-$opponentScore',
                             style: const TextStyle(
-                              fontSize: 11,
+                              fontSize: 14,
                               fontWeight: FontWeight.w800,
                               color: Colors.white,
                             ),
@@ -1739,10 +1759,10 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Avatar with app's gradient colors - Smaller
+          // Avatar with app's gradient colors - Much larger
           UserAvatar(
             avatar: avatar,
-            size: 32,
+            size: 60,
             showBorder: true,
             borderColor: isCurrentUser ? const Color(0xFF2196F3) : const Color(0xFFFF9800),
             borderWidth: 2,
@@ -1752,17 +1772,17 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
           ),
           const SizedBox(height: 6),
 
-          // Name with light theme styling - Smaller
+          // Name with light theme styling - Larger
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.8),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(10),
             ),
             child: Text(
-              name.length > 7 ? '${name.substring(0, 6)}...' : name,
+              name.length > 8 ? '${name.substring(0, 7)}...' : name,
               style: const TextStyle(
-                fontSize: 11,
+                fontSize: 14,
                 fontWeight: FontWeight.bold,
                 color: Color(0xFF2C3E50),
               ),
@@ -1771,19 +1791,19 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
           ),
           const SizedBox(height: 4),
 
-          // Score with app colors - Smaller
+          // Score with app colors - Larger
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
               gradient: const LinearGradient(
                 colors: [Color(0xFF4CAF50), Color(0xFF66BB6A)],
               ),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
               '$score',
               style: const TextStyle(
-                fontSize: 10,
+                fontSize: 16,
                 color: Colors.white,
                 fontWeight: FontWeight.w600,
               ),
@@ -1791,15 +1811,15 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
           ),
           const SizedBox(height: 4),
 
-          // Hearts with proper colors - Smaller
+          // Hearts with proper colors - Larger
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: List.generate(5, (index) => Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 0.5),
+              padding: const EdgeInsets.symmetric(horizontal: 1),
               child: Icon(
                 index < hearts ? Icons.favorite : Icons.favorite_border,
                 color: index < hearts ? Colors.red[400] : Colors.grey[300],
-                size: 10,
+                size: 14,
               ),
             )),
           ),
@@ -1814,17 +1834,17 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
     final operator = question['operator'];
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: const Color(0xFF2196F3).withValues(alpha: 0.3)),
         boxShadow: [
           BoxShadow(
             color: const Color(0xFF2196F3).withValues(alpha: 0.15),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -1843,7 +1863,7 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
             child: const Text(
               '🧮 SOLVE THIS',
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 16,
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
                 letterSpacing: 0.8,
@@ -1856,10 +1876,10 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
           LayoutBuilder(
             builder: (context, constraints) {
               final availableWidth = constraints.maxWidth;
-              // More conservative font scaling
-              final baseFontSize = (availableWidth * 0.08).clamp(24.0, 36.0);
-              final operatorSize = (baseFontSize * 0.7).clamp(16.0, 24.0);
-              final questionMarkSize = (baseFontSize * 0.8).clamp(20.0, 28.0);
+              // More aggressive font scaling for better visibility
+              final baseFontSize = (availableWidth * 0.12).clamp(32.0, 48.0);
+              final operatorSize = (baseFontSize * 0.7).clamp(20.0, 32.0);
+              final questionMarkSize = (baseFontSize * 0.8).clamp(24.0, 36.0);
 
               return Wrap(
                 alignment: WrapAlignment.center,
@@ -1948,18 +1968,18 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
     final options = question['options'] as List<dynamic>;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          // Use intrinsic sizing instead of fixed heights
+          // Use intrinsic sizing with better spacing
           return GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: 2.5, // Fixed aspect ratio for consistency
+              crossAxisSpacing: 20,
+              mainAxisSpacing: 20,
+              childAspectRatio: 1.8, // Taller buttons for better touch targets
             ),
             itemCount: options.length,
             itemBuilder: (context, index) {
@@ -2010,7 +2030,7 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
           end: Alignment.bottomRight,
           colors: [gradientStart!, gradientEnd!],
         ),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: _hasAnswered && isCorrect
             ? Colors.green
@@ -2033,7 +2053,7 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
             HapticFeedback.selectionClick();
             _selectAnswer(option);
           },
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20),
           child: Center(
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -2056,7 +2076,7 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
                 Text(
                   option.toString(),
                   style: const TextStyle(
-                    fontSize: 18,
+                    fontSize: 24,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
                   ),

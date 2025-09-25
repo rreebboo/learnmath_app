@@ -1,47 +1,97 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
+import 'dart:async';
 
 class FriendsService {
   static final FriendsService _instance = FriendsService._internal();
   factory FriendsService() => _instance;
   FriendsService._internal();
 
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  // Lazy-loaded Firebase instances to avoid initialization before Firebase.initializeApp()
+  FirebaseFirestore? _firestoreInstance;
+  FirebaseAuth? _authInstance;
+  FirebaseDatabase? _realtimeDBInstance;
+
+  FirebaseFirestore get firestore => _firestoreInstance ??= FirebaseFirestore.instance;
+  FirebaseAuth get auth => _authInstance ??= FirebaseAuth.instance;
+  FirebaseDatabase get realtimeDB => _realtimeDBInstance ??= FirebaseDatabase.instance;
+
+  // Presence management
+  StreamSubscription<DatabaseEvent>? _presenceSubscription;
+  Timer? _heartbeatTimer;
+  bool _presenceInitialized = false;
 
   String? get currentUserId {
-    final user = _auth.currentUser;
+    final user = auth.currentUser;
     return user?.uid;
   }
 
-  // Get user's friends list
+  // Get user's friends list with real-time online status
   Stream<List<Map<String, dynamic>>> getFriends() {
     if (currentUserId == null) return Stream.value([]);
-    
-    return _firestore
+
+    return firestore
         .collection('users')
         .doc(currentUserId)
         .collection('friends')
         .snapshots()
         .asyncMap((snapshot) async {
       List<Map<String, dynamic>> friends = [];
-      
+
       for (var doc in snapshot.docs) {
         try {
           final friendId = doc.id;
-          final friendData = await _firestore
+          final friendData = await firestore
               .collection('users')
               .doc(friendId)
               .get();
-          
+
           if (friendData.exists) {
             final data = friendData.data() as Map<String, dynamic>;
+
+            // Get real-time online status from Realtime Database
+            bool isOnline = false;
+            DateTime? lastSeen;
+
+            try {
+              final presenceSnapshot = await realtimeDB
+                  .ref('presence/$friendId')
+                  .get();
+
+              if (presenceSnapshot.exists) {
+                final presenceData = presenceSnapshot.value as Map<dynamic, dynamic>?;
+                isOnline = presenceData?['online'] ?? false;
+
+                print('FriendsService: Friend $friendId presence data: $presenceData');
+
+                // Check if the heartbeat is recent (within last 3 minutes for better UX)
+                final lastHeartbeat = presenceData?['lastHeartbeat'] as int?;
+                if (lastHeartbeat != null) {
+                  final heartbeatTime = DateTime.fromMillisecondsSinceEpoch(lastHeartbeat);
+                  final timeDiff = DateTime.now().difference(heartbeatTime);
+                  isOnline = isOnline && timeDiff.inMinutes < 3;
+                  lastSeen = heartbeatTime;
+                  print('FriendsService: Friend $friendId - Heartbeat time: $heartbeatTime, Time diff: ${timeDiff.inMinutes} mins, Online: $isOnline');
+                }
+              } else {
+                print('FriendsService: No presence data found for friend $friendId');
+              }
+            } catch (e) {
+              print('FriendsService: Error reading presence for friend $friendId: $e');
+              // Fallback to Firestore data
+              isOnline = data['isOnline'] ?? false;
+              if (data['lastSeen'] != null) {
+                lastSeen = (data['lastSeen'] as Timestamp).toDate();
+              }
+            }
+
             friends.add({
               'id': friendId,
               'name': data['name'] ?? 'Unknown',
               'avatar': data['avatar'] ?? '🦊',
-              'isOnline': data['isOnline'] ?? false,
-              'lastSeen': data['lastSeen'],
+              'isOnline': isOnline,
+              'lastSeen': lastSeen,
               'totalScore': data['totalScore'] ?? 0,
               'wins': data['wins'] ?? 0,
               'level': _getUserLevel(data['totalScore'] ?? 0),
@@ -53,7 +103,7 @@ class FriendsService {
           // print('Error fetching friend data: $e');
         }
       }
-      
+
       // Sort by online status, then by name
       friends.sort((a, b) {
         if (a['isOnline'] != b['isOnline']) {
@@ -61,7 +111,7 @@ class FriendsService {
         }
         return a['name'].toString().compareTo(b['name'].toString());
       });
-      
+
       return friends;
     });
   }
@@ -70,7 +120,7 @@ class FriendsService {
   Stream<List<Map<String, dynamic>>> getFriendRequests() {
     if (currentUserId == null) return Stream.value([]);
     
-    return _firestore
+    return firestore
         .collection('users')
         .doc(currentUserId)
         .collection('friendRequests')
@@ -83,7 +133,7 @@ class FriendsService {
       for (var doc in snapshot.docs) {
         try {
           final fromUserId = doc.data()['fromUserId'];
-          final userData = await _firestore
+          final userData = await firestore
               .collection('users')
               .doc(fromUserId)
               .get();
@@ -123,7 +173,7 @@ class FriendsService {
       print('FriendsService: Normalized query: "$normalizedQuery"');
       
       // Search by name (case-insensitive)
-      final nameQuery = await _firestore
+      final nameQuery = await firestore
           .collection('users')
           .orderBy('name')
           .startAt([normalizedQuery])
@@ -161,7 +211,7 @@ class FriendsService {
       // Also search for exact matches by doing a simple query
       if (results.isEmpty) {
         print('FriendsService: No results from ordered query, trying simple search');
-        final simpleQuery = await _firestore
+        final simpleQuery = await firestore
             .collection('users')
             .limit(50)
             .get();
@@ -213,12 +263,12 @@ class FriendsService {
     try {
       // Test basic Firestore connectivity first
       print('FriendsService: Testing Firestore connectivity...');
-      await _firestore.collection('users').limit(1).get();
+      await firestore.collection('users').limit(1).get();
       print('FriendsService: Firestore connectivity confirmed');
       
       // Verify current user exists in Firestore
       print('FriendsService: Verifying current user exists in Firestore...');
-      final currentUserDoc = await _firestore.collection('users').doc(currentUserId).get();
+      final currentUserDoc = await firestore.collection('users').doc(currentUserId).get();
       if (!currentUserDoc.exists) {
         print('FriendsService: ERROR - Current user document does not exist in Firestore');
         print('FriendsService: Current user ID: $currentUserId');
@@ -236,7 +286,7 @@ class FriendsService {
       
       print('FriendsService: Checking for existing outgoing request');
       // Check if request already sent by looking in current user's outgoing requests
-      final existingOutgoingRequest = await _firestore
+      final existingOutgoingRequest = await firestore
           .collection('users')
           .doc(currentUserId)
           .collection('friendRequests')
@@ -252,7 +302,7 @@ class FriendsService {
       
       print('FriendsService: Verifying target user exists');
       // Verify target user exists
-      final targetUserDoc = await _firestore.collection('users').doc(toUserId).get();
+      final targetUserDoc = await firestore.collection('users').doc(toUserId).get();
       if (!targetUserDoc.exists) {
         print('FriendsService: ERROR - Target user does not exist');
         print('FriendsService: Target user ID: $toUserId');
@@ -261,10 +311,10 @@ class FriendsService {
       print('FriendsService: Target user verified: ${targetUserDoc.data()?['name']}');
       
       print('FriendsService: Creating friend request documents');
-      final batch = _firestore.batch();
+      final batch = firestore.batch();
       
       // Add to recipient's friend requests
-      final requestRef = _firestore
+      final requestRef = firestore
           .collection('users')
           .doc(toUserId)
           .collection('friendRequests')
@@ -282,7 +332,7 @@ class FriendsService {
       batch.set(requestRef, incomingRequestData);
       
       // Add to sender's sent requests
-      final sentRef = _firestore
+      final sentRef = firestore
           .collection('users')
           .doc(currentUserId)
           .collection('friendRequests')
@@ -332,16 +382,16 @@ class FriendsService {
     
     try {
       print('FriendsService: Starting batch transaction for accepting friend request');
-      final batch = _firestore.batch();
+      final batch = firestore.batch();
       
       // Add to both users' friends lists
-      final myFriendRef = _firestore
+      final myFriendRef = firestore
           .collection('users')
           .doc(currentUserId)
           .collection('friends')
           .doc(fromUserId);
       
-      final theirFriendRef = _firestore
+      final theirFriendRef = firestore
           .collection('users')
           .doc(fromUserId)
           .collection('friends')
@@ -359,7 +409,7 @@ class FriendsService {
       batch.set(theirFriendRef, friendData);
       
       // Remove friend request from recipient (current user)
-      final requestRef = _firestore
+      final requestRef = firestore
           .collection('users')
           .doc(currentUserId)
           .collection('friendRequests')
@@ -408,7 +458,7 @@ class FriendsService {
     try {
       // First, get the request to find the sender
       print('FriendsService: Getting friend request document...');
-      final requestDoc = await _firestore
+      final requestDoc = await firestore
           .collection('users')
           .doc(currentUserId)
           .collection('friendRequests')
@@ -427,7 +477,7 @@ class FriendsService {
       }
       
       print('FriendsService: Found request from user: $fromUserId');
-      final batch = _firestore.batch();
+      final batch = firestore.batch();
       
       // Delete the incoming request
       print('FriendsService: Deleting incoming request: $requestId');
@@ -465,16 +515,16 @@ class FriendsService {
     
     try {
       print('FriendsService: Starting batch transaction to remove friendship');
-      final batch = _firestore.batch();
+      final batch = firestore.batch();
       
       // Remove from both users' friends lists
-      final myFriendRef = _firestore
+      final myFriendRef = firestore
           .collection('users')
           .doc(currentUserId)
           .collection('friends')
           .doc(friendId);
       
-      final theirFriendRef = _firestore
+      final theirFriendRef = firestore
           .collection('users')
           .doc(friendId)
           .collection('friends')
@@ -513,7 +563,7 @@ class FriendsService {
     if (currentUserId == null) return false;
     
     try {
-      final doc = await _firestore
+      final doc = await firestore
           .collection('users')
           .doc(currentUserId)
           .collection('friends')
@@ -566,7 +616,7 @@ class FriendsService {
       print('FriendsService: Checking pending requests between $currentUserId and $userId');
       
       // Check for outgoing request from current user
-      final outgoingRequest = await _firestore
+      final outgoingRequest = await firestore
           .collection('users')
           .doc(currentUserId)
           .collection('friendRequests')
@@ -579,7 +629,7 @@ class FriendsService {
       if (outgoingRequest.docs.isNotEmpty) return true;
       
       // Check for incoming request from the other user
-      final incomingRequest = await _firestore
+      final incomingRequest = await firestore
           .collection('users')
           .doc(currentUserId)
           .collection('friendRequests')
@@ -605,7 +655,7 @@ class FriendsService {
     
     try {
       // Create a duel challenge
-      await _firestore
+      await firestore
           .collection('challenges')
           .add({
         'fromUserId': currentUserId,
@@ -639,7 +689,7 @@ class FriendsService {
     if (currentUserId == null) return;
     
     try {
-      await _firestore
+      await firestore
           .collection('users')
           .doc(currentUserId)
           .update({
@@ -655,7 +705,7 @@ class FriendsService {
   Future<bool> testFirestoreConnection() async {
     try {
       print('FriendsService: Testing Firestore connection...');
-      final testDoc = await _firestore
+      final testDoc = await firestore
           .collection('users')
           .limit(1)
           .get();
@@ -678,7 +728,7 @@ class FriendsService {
       print('FriendsService: Testing Firestore write permissions...');
       
       // Try to update the user's own document with a test field
-      await _firestore
+      await firestore
           .collection('users')
           .doc(currentUserId)
           .update({
@@ -706,10 +756,10 @@ class FriendsService {
     try {
       print('FriendsService: Cleaning up friend requests between $userId1 and $userId2');
       
-      final batch = _firestore.batch();
+      final batch = firestore.batch();
       
       // Clean up requests from userId1 (outgoing from userId1 to userId2)
-      final user1OutgoingQuery = await _firestore
+      final user1OutgoingQuery = await firestore
           .collection('users')
           .doc(userId1)
           .collection('friendRequests')
@@ -722,7 +772,7 @@ class FriendsService {
       }
       
       // Clean up requests to userId1 (incoming to userId1 from userId2)
-      final user1IncomingQuery = await _firestore
+      final user1IncomingQuery = await firestore
           .collection('users')
           .doc(userId1)
           .collection('friendRequests')
@@ -735,7 +785,7 @@ class FriendsService {
       }
       
       // Clean up requests from userId2 (outgoing from userId2 to userId1)
-      final user2OutgoingQuery = await _firestore
+      final user2OutgoingQuery = await firestore
           .collection('users')
           .doc(userId2)
           .collection('friendRequests')
@@ -748,7 +798,7 @@ class FriendsService {
       }
       
       // Clean up requests to userId2 (incoming to userId2 from userId1)
-      final user2IncomingQuery = await _firestore
+      final user2IncomingQuery = await firestore
           .collection('users')
           .doc(userId2)
           .collection('friendRequests')
@@ -783,7 +833,7 @@ class FriendsService {
       print('FriendsService: Testing subcollection write permissions...');
       
       // Try to create a test document in friendRequests subcollection
-      final testRef = _firestore
+      final testRef = firestore
           .collection('users')
           .doc(currentUserId)
           .collection('friendRequests')
@@ -941,11 +991,11 @@ class FriendsService {
     try {
       print('FriendsService: 🔥 AGGRESSIVE cleanup - removing ALL friend requests for $currentUserId');
       
-      final batch = _firestore.batch();
+      final batch = firestore.batch();
       int deletedCount = 0;
       
       // Get ALL friend requests for current user (including pending ones)
-      final allRequests = await _firestore
+      final allRequests = await firestore
           .collection('users')
           .doc(currentUserId)
           .collection('friendRequests')
@@ -980,11 +1030,11 @@ class FriendsService {
     try {
       print('FriendsService: 🧹 Starting debug cleanup of ALL friend requests for $currentUserId');
       
-      final batch = _firestore.batch();
+      final batch = firestore.batch();
       int deletedCount = 0;
       
       // Get ALL friend requests for current user
-      final allRequests = await _firestore
+      final allRequests = await firestore
           .collection('users')
           .doc(currentUserId)
           .collection('friendRequests')
@@ -1043,7 +1093,7 @@ class FriendsService {
       final stats = <String, dynamic>{};
       
       // Count friends
-      final friendsSnapshot = await _firestore
+      final friendsSnapshot = await firestore
           .collection('users')
           .doc(currentUserId)
           .collection('friends')
@@ -1051,7 +1101,7 @@ class FriendsService {
       stats['friendsCount'] = friendsSnapshot.docs.length;
       
       // Count incoming requests
-      final incomingSnapshot = await _firestore
+      final incomingSnapshot = await firestore
           .collection('users')
           .doc(currentUserId)
           .collection('friendRequests')
@@ -1061,7 +1111,7 @@ class FriendsService {
       stats['incomingRequestsCount'] = incomingSnapshot.docs.length;
       
       // Count outgoing requests
-      final outgoingSnapshot = await _firestore
+      final outgoingSnapshot = await firestore
           .collection('users')
           .doc(currentUserId)
           .collection('friendRequests')
@@ -1079,5 +1129,158 @@ class FriendsService {
       print('FriendsService: Error getting friends stats: $e');
       return {};
     }
+  }
+
+  // ===== REAL-TIME PRESENCE SYSTEM =====
+
+  /// Initialize real-time presence system
+  Future<void> initializePresence() async {
+    if (currentUserId == null || _presenceInitialized) return;
+
+    try {
+      await _setupPresenceConnection();
+      await _startPresenceHeartbeat();
+      _presenceInitialized = true;
+      print('FriendsService: Presence system initialized');
+    } catch (e) {
+      print('FriendsService: Error initializing presence: $e');
+    }
+  }
+
+  /// Set up presence connection with Firebase Realtime Database
+  Future<void> _setupPresenceConnection() async {
+    if (currentUserId == null) return;
+
+    try {
+      final connectedRef = realtimeDB.ref('.info/connected');
+      final presenceRef = realtimeDB.ref('presence/$currentUserId');
+
+      // Cancel existing subscription
+      _presenceSubscription?.cancel();
+
+      _presenceSubscription = connectedRef.onValue.listen((event) async {
+        final isConnected = event.snapshot.value as bool? ?? false;
+
+        if (isConnected) {
+          // Set online status
+          final onlineData = {
+            'online': true,
+            'lastHeartbeat': DateTime.now().millisecondsSinceEpoch,
+            'userId': currentUserId,
+          };
+
+          await presenceRef.set(onlineData);
+          print('FriendsService: Setting user $currentUserId online with data: $onlineData');
+
+          // Set offline status on disconnect
+          final offlineData = {
+            'online': false,
+            'lastHeartbeat': DateTime.now().millisecondsSinceEpoch,
+            'userId': currentUserId,
+          };
+
+          await presenceRef.onDisconnect().set(offlineData);
+          print('FriendsService: Set disconnect handler for user $currentUserId');
+
+          print('FriendsService: User $currentUserId is now online');
+        } else {
+          print('FriendsService: User $currentUserId disconnected from Firebase');
+        }
+      });
+    } catch (e) {
+      print('FriendsService: Error setting up presence connection: $e');
+    }
+  }
+
+  /// Start heartbeat timer to maintain online status
+  Future<void> _startPresenceHeartbeat() async {
+    if (currentUserId == null) return;
+
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = Timer.periodic(const Duration(minutes: 1), (timer) async {
+      try {
+        final heartbeatTime = DateTime.now().millisecondsSinceEpoch;
+        final presenceRef = realtimeDB.ref('presence/$currentUserId');
+
+        await presenceRef.update({
+          'lastHeartbeat': heartbeatTime,
+          'online': true,
+        });
+
+        print('FriendsService: Sent heartbeat for user $currentUserId at ${DateTime.fromMillisecondsSinceEpoch(heartbeatTime)}');
+
+        // Also update Firestore for backup
+        await firestore
+            .collection('users')
+            .doc(currentUserId)
+            .update({
+          'isOnline': true,
+          'lastSeen': FieldValue.serverTimestamp(),
+        });
+      } catch (e) {
+        print('FriendsService: Error sending heartbeat: $e');
+      }
+    });
+  }
+
+  /// Set user offline status
+  Future<void> setUserOffline() async {
+    if (currentUserId == null) return;
+
+    try {
+      // Cancel timers and subscriptions
+      _heartbeatTimer?.cancel();
+      _presenceSubscription?.cancel();
+
+      // Set offline in Realtime Database
+      final presenceRef = realtimeDB.ref('presence/$currentUserId');
+      await presenceRef.set({
+        'online': false,
+        'lastHeartbeat': DateTime.now().millisecondsSinceEpoch,
+        'userId': currentUserId,
+      });
+
+      // Also update Firestore
+      await firestore
+          .collection('users')
+          .doc(currentUserId)
+          .update({
+        'isOnline': false,
+        'lastSeen': FieldValue.serverTimestamp(),
+      });
+
+      _presenceInitialized = false;
+      print('FriendsService: User $currentUserId set to offline');
+    } catch (e) {
+      print('FriendsService: Error setting user offline: $e');
+    }
+  }
+
+  /// Get real-time online status for a specific user
+  Stream<bool> getUserOnlineStatus(String userId) {
+    return realtimeDB
+        .ref('presence/$userId')
+        .onValue
+        .map((event) {
+      if (!event.snapshot.exists) return false;
+
+      final data = event.snapshot.value as Map<dynamic, dynamic>?;
+      final isOnline = data?['online'] ?? false;
+      final lastHeartbeat = data?['lastHeartbeat'] as int?;
+
+      if (!isOnline || lastHeartbeat == null) return false;
+
+      // Check if heartbeat is recent (within last 3 minutes for better UX)
+      final heartbeatTime = DateTime.fromMillisecondsSinceEpoch(lastHeartbeat);
+      final timeDiff = DateTime.now().difference(heartbeatTime);
+      return timeDiff.inMinutes < 3;
+    });
+  }
+
+  /// Cleanup presence system
+  void dispose() {
+    _heartbeatTimer?.cancel();
+    _presenceSubscription?.cancel();
+    _presenceInitialized = false;
   }
 }

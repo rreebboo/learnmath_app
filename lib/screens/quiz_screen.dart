@@ -333,7 +333,7 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
           title: 'Challenge Friend',
           subtitle: 'Invite a friend to battle',
           color: const Color(0xFF5B9EF3),
-          onTap: () => _showQuickMatchDialog(),
+          onTap: () => _showChallengeFriendsDialog(),
         ),
         const SizedBox(height: 12),
 
@@ -1025,6 +1025,665 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
         ),
       ),
     );
+  }
+
+  void _showChallengeFriendsDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final screenHeight = MediaQuery.of(context).size.height;
+              final screenWidth = MediaQuery.of(context).size.width;
+              final isSmallScreen = screenWidth < 360;
+              final isMediumScreen = screenWidth < 400;
+
+              return Container(
+                constraints: BoxConstraints(
+                  maxWidth: screenWidth - 32,
+                  maxHeight: screenHeight * 0.8,
+                  minHeight: 400,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Header with responsive padding
+                    Container(
+                      padding: EdgeInsets.all(isSmallScreen ? 16 : 20),
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.only(
+                          topLeft: Radius.circular(20),
+                          topRight: Radius.circular(20),
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: EdgeInsets.all(isSmallScreen ? 6 : 8),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF5B9EF3).withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Icon(
+                                  Icons.group,
+                                  color: const Color(0xFF5B9EF3),
+                                  size: isSmallScreen ? 20 : 24,
+                                ),
+                              ),
+                              SizedBox(width: isSmallScreen ? 8 : 12),
+                              Expanded(
+                                child: Text(
+                                  'Challenge Friends',
+                                  style: TextStyle(
+                                    fontSize: isSmallScreen ? 16 : isMediumScreen ? 18 : 20,
+                                    fontWeight: FontWeight.bold,
+                                    color: const Color(0xFF2C3E50),
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              IconButton(
+                                onPressed: () => Navigator.pop(context),
+                                icon: Icon(
+                                  Icons.close,
+                                  color: Colors.grey,
+                                  size: isSmallScreen ? 20 : 24,
+                                ),
+                                padding: EdgeInsets.all(isSmallScreen ? 4 : 8),
+                                constraints: BoxConstraints(
+                                  minWidth: isSmallScreen ? 32 : 40,
+                                  minHeight: isSmallScreen ? 32 : 40,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Friends List with responsive container
+                    Expanded(
+                      child: Container(
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFF8F9FA),
+                          borderRadius: BorderRadius.only(
+                            bottomLeft: Radius.circular(20),
+                            bottomRight: Radius.circular(20),
+                          ),
+                        ),
+                        child: StreamBuilder<List<Map<String, dynamic>>>(
+                          stream: _friendsService.getFriends(),
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState == ConnectionState.waiting) {
+                              return const Center(
+                                child: CircularProgressIndicator(
+                                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF5B9EF3)),
+                                ),
+                              );
+                            }
+
+                            if (snapshot.hasError) {
+                              return Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(isSmallScreen ? 16 : 20),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.error_outline,
+                                        size: isSmallScreen ? 40 : 48,
+                                        color: Colors.grey,
+                                      ),
+                                      SizedBox(height: isSmallScreen ? 12 : 16),
+                                      Text(
+                                        'Error loading friends',
+                                        style: TextStyle(
+                                          fontSize: isSmallScreen ? 14 : 16,
+                                          color: Colors.grey[600],
+                                        ),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }
+
+                            final friends = snapshot.data ?? [];
+
+                            if (friends.isEmpty) {
+                              return Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(isSmallScreen ? 16 : 20),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Container(
+                                        padding: EdgeInsets.all(isSmallScreen ? 16 : 20),
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey[100],
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: Icon(
+                                          Icons.group_off,
+                                          size: isSmallScreen ? 40 : 48,
+                                          color: Colors.grey[400],
+                                        ),
+                                      ),
+                                      SizedBox(height: isSmallScreen ? 16 : 20),
+                                      Text(
+                                        'No Friends Yet',
+                                        style: TextStyle(
+                                          fontSize: isSmallScreen ? 16 : 18,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.grey[600],
+                                        ),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                      SizedBox(height: isSmallScreen ? 6 : 8),
+                                      Text(
+                                        'Add some friends to start challenging them!',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontSize: isSmallScreen ? 12 : 14,
+                                          color: Colors.grey[500],
+                                        ),
+                                      ),
+                                      SizedBox(height: isSmallScreen ? 16 : 20),
+                                      ElevatedButton(
+                                        onPressed: () {
+                                          Navigator.pop(context);
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (context) => const FriendsScreen(),
+                                            ),
+                                          );
+                                        },
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFF5B9EF3),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: isSmallScreen ? 20 : 24,
+                                            vertical: isSmallScreen ? 10 : 12,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          'Add Friends',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: isSmallScreen ? 12 : 14,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }
+
+                            return ListView.separated(
+                              padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
+                              itemCount: friends.length,
+                              separatorBuilder: (context, index) => SizedBox(height: isSmallScreen ? 6 : 8),
+                              itemBuilder: (context, index) {
+                                final friend = friends[index];
+                                return _buildFriendChallengeCard(friend, isSmallScreen, isMediumScreen);
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildFriendChallengeCard(Map<String, dynamic> friend, bool isSmallScreen, bool isMediumScreen) {
+    final isOnline = friend['isOnline'] ?? false;
+    final level = friend['level'] ?? 1;
+    final wins = friend['wins'] ?? 0;
+
+    return Container(
+      padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(isSmallScreen ? 12 : 15),
+        border: Border.all(
+          color: isOnline ? const Color(0xFF7ED321).withValues(alpha: 0.3) : Colors.grey[200]!,
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Friend Avatar with Online Status
+          Stack(
+            children: [
+              UserAvatar(
+                avatar: friend['avatar'] ?? '🦊',
+                size: isSmallScreen ? 40 : isMediumScreen ? 45 : 50,
+                showBorder: true,
+                borderColor: isOnline ? const Color(0xFF7ED321) : Colors.grey[300]!,
+                borderWidth: 2,
+                gradientColors: isOnline
+                    ? [const Color(0xFF7ED321), const Color(0xFF9ACD32)]
+                    : [Colors.grey[400]!, Colors.grey[500]!],
+              ),
+              // Online status indicator
+              if (isOnline)
+                Positioned(
+                  bottom: 0,
+                  right: 0,
+                  child: Container(
+                    width: isSmallScreen ? 12 : 16,
+                    height: isSmallScreen ? 12 : 16,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF7ED321),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          SizedBox(width: isSmallScreen ? 12 : 16),
+
+          // Friend Info
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Name and Level
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        friend['name'] ?? 'Unknown',
+                        style: TextStyle(
+                          fontSize: isSmallScreen ? 14 : 16,
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF2C3E50),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isSmallScreen ? 6 : 8,
+                        vertical: isSmallScreen ? 1 : 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFB74D).withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(isSmallScreen ? 10 : 12),
+                      ),
+                      child: Text(
+                        'LV $level',
+                        style: TextStyle(
+                          fontSize: isSmallScreen ? 9 : 11,
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFFFF8F00),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: isSmallScreen ? 2 : 4),
+
+                // Status and Stats
+                Row(
+                  children: [
+                    Icon(
+                      isOnline ? Icons.circle : Icons.access_time,
+                      size: isSmallScreen ? 10 : 12,
+                      color: isOnline ? const Color(0xFF7ED321) : Colors.grey[400],
+                    ),
+                    SizedBox(width: isSmallScreen ? 3 : 4),
+                    Text(
+                      isOnline ? 'Online' : 'Offline',
+                      style: TextStyle(
+                        fontSize: isSmallScreen ? 10 : 12,
+                        color: isOnline ? const Color(0xFF7ED321) : Colors.grey[500],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    SizedBox(width: isSmallScreen ? 8 : 12),
+                    Icon(
+                      Icons.emoji_events,
+                      size: isSmallScreen ? 10 : 12,
+                      color: Colors.amber[700],
+                    ),
+                    SizedBox(width: isSmallScreen ? 3 : 4),
+                    Expanded(
+                      child: Text(
+                        '$wins wins',
+                        style: TextStyle(
+                          fontSize: isSmallScreen ? 10 : 12,
+                          color: Colors.grey[600],
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // Challenge Button
+          GestureDetector(
+            onTap: () => _challengeFriend(friend),
+            child: Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: isSmallScreen ? 12 : 16,
+                vertical: isSmallScreen ? 6 : 8,
+              ),
+              decoration: BoxDecoration(
+                gradient: isOnline
+                    ? const LinearGradient(
+                        colors: [Color(0xFF5B9EF3), Color(0xFF42A5F5)],
+                      )
+                    : null,
+                color: isOnline ? null : Colors.grey[300],
+                borderRadius: BorderRadius.circular(isSmallScreen ? 16 : 20),
+                boxShadow: isOnline ? [
+                  BoxShadow(
+                    color: const Color(0xFF5B9EF3).withValues(alpha: 0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ] : null,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.sports_martial_arts,
+                    size: isSmallScreen ? 14 : 16,
+                    color: isOnline ? Colors.white : Colors.grey[500],
+                  ),
+                  SizedBox(width: isSmallScreen ? 4 : 6),
+                  Text(
+                    isSmallScreen ? 'Fight' : 'Challenge',
+                    style: TextStyle(
+                      fontSize: isSmallScreen ? 10 : 12,
+                      fontWeight: FontWeight.bold,
+                      color: isOnline ? Colors.white : Colors.grey[500],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _challengeFriend(Map<String, dynamic> friend) {
+    final isOnline = friend['isOnline'] ?? false;
+
+    if (!isOnline) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${friend['name']} is currently offline'),
+          backgroundColor: Colors.grey[600],
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    // Close the friends dialog first
+    Navigator.pop(context);
+
+    // Show the challenge setup dialog
+    _showChallengeSetupDialog(friend);
+  }
+
+  void _showChallengeSetupDialog(Map<String, dynamic> friend) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        String selectedDifficulty = 'easy';
+        String selectedOperator = '+';
+
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return LayoutBuilder(
+              builder: (context, constraints) {
+                final screenWidth = MediaQuery.of(context).size.width;
+                final screenHeight = MediaQuery.of(context).size.height;
+                final isSmallScreen = screenWidth < 360;
+
+                return AlertDialog(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  insetPadding: EdgeInsets.symmetric(
+                    horizontal: isSmallScreen ? 16 : 24,
+                    vertical: isSmallScreen ? 24 : 40,
+                  ),
+                  contentPadding: EdgeInsets.zero,
+                  titlePadding: EdgeInsets.zero,
+                  title: Container(
+                    padding: EdgeInsets.all(isSmallScreen ? 16 : 20),
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(20),
+                        topRight: Radius.circular(20),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        UserAvatar(
+                          avatar: friend['avatar'] ?? '🦊',
+                          size: isSmallScreen ? 28 : 32,
+                          gradientColors: const [Color(0xFF7ED321), Color(0xFF9ACD32)],
+                        ),
+                        SizedBox(width: isSmallScreen ? 8 : 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'Challenge ${friend['name']}',
+                                style: TextStyle(
+                                  fontSize: isSmallScreen ? 16 : 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: const Color(0xFF2C3E50),
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              Text(
+                                'Setup your duel',
+                                style: TextStyle(
+                                  fontSize: isSmallScreen ? 12 : 14,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  content: Container(
+                    constraints: BoxConstraints(
+                      maxHeight: screenHeight * 0.6,
+                      maxWidth: screenWidth - (isSmallScreen ? 32 : 48),
+                    ),
+                    padding: EdgeInsets.all(isSmallScreen ? 16 : 20),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Choose your challenge level:',
+                            style: TextStyle(
+                              fontSize: isSmallScreen ? 14 : 16,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF2C3E50),
+                            ),
+                          ),
+                          SizedBox(height: isSmallScreen ? 12 : 15),
+
+                          // Difficulty Selection
+                          Container(
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.grey[300]!),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Column(
+                              children: [
+                                _buildDifficultyOption(
+                                  'easy', 'Easy', '1-10 numbers', const Color(0xFF7ED321),
+                                  selectedDifficulty, (value) => setState(() => selectedDifficulty = value)
+                                ),
+                                const Divider(height: 1),
+                                _buildDifficultyOption(
+                                  'medium', 'Medium', '10-100 numbers', const Color(0xFFFFA500),
+                                  selectedDifficulty, (value) => setState(() => selectedDifficulty = value)
+                                ),
+                                const Divider(height: 1),
+                                _buildDifficultyOption(
+                                  'hard', 'Hard', '100+ numbers', const Color(0xFFFF6B6B),
+                                  selectedDifficulty, (value) => setState(() => selectedDifficulty = value)
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          SizedBox(height: isSmallScreen ? 16 : 20),
+
+                          Text(
+                            'Choose operation:',
+                            style: TextStyle(
+                              fontSize: isSmallScreen ? 14 : 16,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF2C3E50),
+                            ),
+                          ),
+                          SizedBox(height: isSmallScreen ? 12 : 15),
+
+                          // Operation Selection
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              _buildOperatorButton('+', selectedOperator, (op) => setState(() => selectedOperator = op)),
+                              _buildOperatorButton('-', selectedOperator, (op) => setState(() => selectedOperator = op)),
+                              _buildOperatorButton('×', selectedOperator, (op) => setState(() => selectedOperator = op)),
+                              _buildOperatorButton('÷', selectedOperator, (op) => setState(() => selectedOperator = op)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text(
+                        'Cancel',
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: isSmallScreen ? 12 : 14,
+                        ),
+                      ),
+                    ),
+                    ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _sendFriendChallenge(friend, selectedDifficulty, selectedOperator);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF5B9EF3),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isSmallScreen ? 16 : 24,
+                          vertical: isSmallScreen ? 8 : 12,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.sports_martial_arts,
+                            color: Colors.white,
+                            size: isSmallScreen ? 16 : 18,
+                          ),
+                          SizedBox(width: isSmallScreen ? 6 : 8),
+                          Text(
+                            isSmallScreen ? 'Challenge' : 'Send Challenge',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: isSmallScreen ? 12 : 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _sendFriendChallenge(Map<String, dynamic> friend, String difficulty, String operator) {
+    // For now, show a success message and start a regular duel
+    // TODO: Implement actual friend challenge system with invitations
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.white),
+            SizedBox(width: 8),
+            Text('Challenge sent to ${friend['name']}!'),
+          ],
+        ),
+        backgroundColor: Color(0xFF7ED321),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+
+    // Start the duel (for now using regular duel screen)
+    _startQuizDuel(difficulty, operator);
   }
 
   void _showComingSoonDialog(String feature) {

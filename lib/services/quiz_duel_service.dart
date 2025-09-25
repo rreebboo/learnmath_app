@@ -5,12 +5,18 @@ import 'dart:async';
 import 'duel_engine.dart';
 
 class QuizDuelService {
-  final DuelEngine _duelEngine = DuelEngine();
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseDatabase _realtimeDB = FirebaseDatabase.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  // Lazy initialization to avoid Firebase access before initialization
+  DuelEngine? _duelEngineInstance;
+  FirebaseFirestore? _firestoreInstance;
+  FirebaseDatabase? _realtimeDBInstance;
+  FirebaseAuth? _authInstance;
 
-  String? get currentUserId => _auth.currentUser?.uid;
+  DuelEngine get duelEngine => _duelEngineInstance ??= DuelEngine();
+  FirebaseFirestore get firestore => _firestoreInstance ??= FirebaseFirestore.instance;
+  FirebaseDatabase get realtimeDB => _realtimeDBInstance ??= FirebaseDatabase.instance;
+  FirebaseAuth get auth => _authInstance ??= FirebaseAuth.instance;
+
+  String? get currentUserId => auth.currentUser?.uid;
   StreamSubscription<DatabaseEvent>? _presenceSubscription;
   StreamSubscription<DatabaseEvent>? _matchmakingSubscription;
 
@@ -26,12 +32,12 @@ class QuizDuelService {
       print('QuizDuelService: Starting quick match...');
 
       // First try to find an existing match quickly
-      final existingGameId = await _duelEngine.findQuickMatch(difficulty, operator, topicName);
+      final existingGameId = await duelEngine.findQuickMatch(difficulty, operator, topicName);
 
       if (existingGameId != null) {
         print('QuizDuelService: Found existing game: $existingGameId');
         // Join the existing game
-        final success = await _duelEngine.joinDuel(existingGameId);
+        final success = await duelEngine.joinDuel(existingGameId);
         if (success) {
           // Don't start automatically - let players go through ready phase
           print('QuizDuelService: Joined game, now in ready phase');
@@ -41,7 +47,7 @@ class QuizDuelService {
 
       // No existing game found, create a new waiting game immediately
       print('QuizDuelService: Creating new waiting game...');
-      final gameId = await _duelEngine.createDuel(
+      final gameId = await duelEngine.createDuel(
         difficulty: difficulty,
         operator: operator,
         topicName: topicName,
@@ -71,7 +77,7 @@ class QuizDuelService {
     try {
       print('QuizDuelService: Creating friend challenge...');
 
-      final gameId = await _duelEngine.createDuel(
+      final gameId = await duelEngine.createDuel(
         difficulty: difficulty,
         operator: operator,
         topicName: topicName,
@@ -92,7 +98,7 @@ class QuizDuelService {
       print('QuizDuelService: Accepting challenge: $gameId');
 
       // Join the game and go to ready phase - don't auto-start
-      final success = await _duelEngine.joinDuel(gameId);
+      final success = await duelEngine.joinDuel(gameId);
       if (success) {
         print('QuizDuelService: Challenge accepted, now in ready phase');
       }
@@ -107,7 +113,7 @@ class QuizDuelService {
   Future<bool> setPlayerReady(String gameId) async {
     try {
       print('QuizDuelService: Setting player ready for game: $gameId');
-      return await _duelEngine.setPlayerReady(gameId);
+      return await duelEngine.setPlayerReady(gameId);
     } catch (e) {
       print('QuizDuelService: Error setting player ready: $e');
       return false;
@@ -122,7 +128,7 @@ class QuizDuelService {
     required int correctAnswer,
     required double timeSpent,
   }) async {
-    return await _duelEngine.submitAnswer(
+    return await duelEngine.submitAnswer(
       gameId: gameId,
       questionIndex: questionIndex,
       selectedAnswer: selectedAnswer,
@@ -133,24 +139,24 @@ class QuizDuelService {
 
   // Handle question timeout
   Future<void> handleTimeout(String gameId, int questionIndex) async {
-    await _duelEngine.handleQuestionTimeout(gameId, questionIndex);
+    await duelEngine.handleQuestionTimeout(gameId, questionIndex);
   }
 
   // Get real-time duel updates
   Stream<DocumentSnapshot> getDuelStream(String gameId) {
-    return _duelEngine.getDuelStream(gameId);
+    return duelEngine.getDuelStream(gameId);
   }
 
   // Leave a duel with proper cleanup
   Future<void> leaveDuel(String gameId) async {
-    await _duelEngine.leaveDuel(gameId);
+    await duelEngine.leaveDuel(gameId);
     await _cleanupMatchmaking();
   }
 
   // Get user's duel statistics
   Future<Map<String, dynamic>?> getDuelStats(String userId) async {
     try {
-      final userDoc = await _firestore.collection('users').doc(userId).get();
+      final userDoc = await firestore.collection('users').doc(userId).get();
       if (!userDoc.exists) return null;
 
       final userData = userDoc.data()!;
@@ -172,7 +178,7 @@ class QuizDuelService {
   // Get duel history for a user
   Future<List<Map<String, dynamic>>> getDuelHistory(String userId, {int limit = 10}) async {
     try {
-      final query = await _firestore
+      final query = await firestore
           .collection('duels')
           .where('state', isEqualTo: 'finished')
           .where('players.player1.userId', isEqualTo: userId)
@@ -180,7 +186,7 @@ class QuizDuelService {
           .limit(limit)
           .get();
 
-      final query2 = await _firestore
+      final query2 = await firestore
           .collection('duels')
           .where('state', isEqualTo: 'finished')
           .where('players.player2.userId', isEqualTo: userId)
@@ -214,8 +220,8 @@ class QuizDuelService {
     if (currentUserId == null) return;
 
     try {
-      final presenceRef = _realtimeDB.ref('presence/$currentUserId');
-      final connectedRef = _realtimeDB.ref('.info/connected');
+      final presenceRef = realtimeDB.ref('presence/$currentUserId');
+      final connectedRef = realtimeDB.ref('.info/connected');
 
       // Set up presence
       _presenceSubscription?.cancel();
@@ -246,7 +252,7 @@ class QuizDuelService {
 
     try {
       // Remove from all matchmaking queues
-      final matchmakingRef = _realtimeDB.ref('matchmaking');
+      final matchmakingRef = realtimeDB.ref('matchmaking');
       final snapshot = await matchmakingRef.get();
 
       if (snapshot.exists && snapshot.value != null) {
@@ -266,7 +272,7 @@ class QuizDuelService {
     try {
       final oneHourAgo = DateTime.now().subtract(Duration(hours: 1));
 
-      final oldGames = await _firestore
+      final oldGames = await firestore
           .collection('duels')
           .where('createdAt', isLessThan: Timestamp.fromDate(oneHourAgo))
           .where('state', isEqualTo: 'waiting')
@@ -286,7 +292,7 @@ class QuizDuelService {
   // Clean up old matchmaking entries
   Future<void> _cleanupOldMatchmakingEntries() async {
     try {
-      final matchmakingRef = _realtimeDB.ref('matchmaking');
+      final matchmakingRef = realtimeDB.ref('matchmaking');
       final snapshot = await matchmakingRef.get();
 
       if (snapshot.exists && snapshot.value != null) {

@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'database_service.dart';
 import 'leaderboard_service.dart';
+import 'friends_service.dart';
 import '../firebase_options.dart';
 
 class AppInitializationService {
@@ -12,6 +13,7 @@ class AppInitializationService {
 
   final DatabaseService _databaseService = DatabaseService();
   final LeaderboardService _leaderboardService = LeaderboardService.instance;
+  final FriendsService _friendsService = FriendsService();
   
   bool _isInitialized = false;
   bool get isInitialized => _isInitialized;
@@ -32,6 +34,9 @@ class AppInitializationService {
 
       // Set up periodic leaderboard cache updates
       await _setupPeriodicUpdates();
+
+      // Set up authentication state listener for presence system
+      await _setupAuthStateListener();
 
       _isInitialized = true;
       print('LearnMath app initialized successfully');
@@ -113,6 +118,42 @@ class AppInitializationService {
         'error': e.toString(),
         'lastUpdated': DateTime.now().toIso8601String(),
       };
+    }
+  }
+
+  // Set up authentication state listener for presence system
+  Future<void> _setupAuthStateListener() async {
+    FirebaseAuth.instance.authStateChanges().listen((User? user) {
+      if (user != null) {
+        // User signed in, initialize presence
+        print('AppInitializationService: User signed in, initializing presence for ${user.uid}');
+        _initializeUserPresence();
+      } else {
+        // User signed out, clean up presence
+        print('AppInitializationService: User signed out, cleaning up presence');
+        _cleanupUserPresence();
+      }
+    });
+  }
+
+  // Initialize user presence when user signs in
+  Future<void> _initializeUserPresence() async {
+    try {
+      await _friendsService.initializePresence();
+      print('AppInitializationService: User presence initialized');
+    } catch (e) {
+      print('AppInitializationService: Error initializing user presence: $e');
+    }
+  }
+
+  // Cleanup user presence when user signs out
+  Future<void> _cleanupUserPresence() async {
+    try {
+      await _friendsService.setUserOffline();
+      _friendsService.dispose();
+      print('AppInitializationService: User presence cleaned up');
+    } catch (e) {
+      print('AppInitializationService: Error cleaning up user presence: $e');
     }
   }
 

@@ -8,15 +8,19 @@ enum DuelGameState { waiting, ready, active, finished }
 enum QuestionState { waiting, active, answered, timeUp }
 
 class DuelEngine {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseDatabase _realtimeDB = FirebaseDatabase.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  // Lazy initialization to avoid Firebase access before initialization
+  FirebaseFirestore? _firestoreInstance;
+  FirebaseDatabase? _realtimeDBInstance;
+  FirebaseAuth? _authInstance;
 
+  FirebaseFirestore get firestore => _firestoreInstance ??= FirebaseFirestore.instance;
+  FirebaseDatabase get realtimeDB => _realtimeDBInstance ??= FirebaseDatabase.instance;
+  FirebaseAuth get auth => _authInstance ??= FirebaseAuth.instance;
 
   // Store active game sessions for cleanup
   final Map<String, StreamSubscription> _gameSubscriptions = {};
 
-  String? get currentUserId => _auth.currentUser?.uid;
+  String? get currentUserId => auth.currentUser?.uid;
 
   // Game Configuration
   static const int questionsPerDuel = 10;
@@ -33,7 +37,7 @@ class DuelEngine {
     try {
       if (currentUserId == null) return null;
 
-      final gameRef = _firestore.collection('duels').doc();
+      final gameRef = firestore.collection('duels').doc();
       final gameId = gameRef.id;
       final questions = _generateQuestions(difficulty, operator);
 
@@ -103,7 +107,7 @@ class DuelEngine {
     if (currentUserId == null) return;
 
     try {
-      final sessionRef = _realtimeDB.ref('activeSessions/$gameId');
+      final sessionRef = realtimeDB.ref('activeSessions/$gameId');
       await sessionRef.set({
         'gameId': gameId,
         'creator': currentUserId,
@@ -125,7 +129,7 @@ class DuelEngine {
       if (currentUserId == null) return false;
 
       // First check if game still exists and is valid
-      final gameDoc = await _firestore.collection('duels').doc(gameId).get();
+      final gameDoc = await firestore.collection('duels').doc(gameId).get();
       if (!gameDoc.exists) {
         print('DuelEngine: Game $gameId no longer exists');
         return false;
@@ -139,7 +143,7 @@ class DuelEngine {
         return false;
       }
 
-      await _firestore.collection('duels').doc(gameId).update({
+      await firestore.collection('duels').doc(gameId).update({
         'players.player2': {
           'userId': currentUserId,
           'score': 0,
@@ -165,7 +169,7 @@ class DuelEngine {
   // Update session activity
   Future<void> _updateSessionActivity(String gameId) async {
     try {
-      final sessionRef = _realtimeDB.ref('activeSessions/$gameId');
+      final sessionRef = realtimeDB.ref('activeSessions/$gameId');
       await sessionRef.update({
         'lastActivity': ServerValue.timestamp,
       });
@@ -180,7 +184,7 @@ class DuelEngine {
       if (currentUserId == null) return false;
 
       // Get current game data
-      final gameDoc = await _firestore.collection('duels').doc(gameId).get();
+      final gameDoc = await firestore.collection('duels').doc(gameId).get();
       if (!gameDoc.exists) {
         print('DuelEngine: Game $gameId does not exist');
         return false;
@@ -196,7 +200,7 @@ class DuelEngine {
       print('DuelEngine: Marking $playerKey as ready in game $gameId');
 
       // Update player ready status
-      await _firestore.collection('duels').doc(gameId).update({
+      await firestore.collection('duels').doc(gameId).update({
         'players.$playerKey.ready': true,
         'lastActivity': FieldValue.serverTimestamp(),
       });
@@ -226,7 +230,7 @@ class DuelEngine {
   Future<bool> _startDuelInternal(String gameId) async {
     try {
       // Verify game still exists and is in correct state
-      final gameDoc = await _firestore.collection('duels').doc(gameId).get();
+      final gameDoc = await firestore.collection('duels').doc(gameId).get();
       if (!gameDoc.exists) {
         print('DuelEngine: Cannot start - game $gameId no longer exists');
         return false;
@@ -240,7 +244,7 @@ class DuelEngine {
         return false;
       }
 
-      await _firestore.collection('duels').doc(gameId).update({
+      await firestore.collection('duels').doc(gameId).update({
         'state': DuelGameState.active.name,
         'startedAt': FieldValue.serverTimestamp(),
         'currentQuestionIndex': 0,
@@ -284,7 +288,7 @@ class DuelEngine {
       };
 
       // Determine which player we are
-      final duelDoc = await _firestore.collection('duels').doc(gameId).get();
+      final duelDoc = await firestore.collection('duels').doc(gameId).get();
       if (!duelDoc.exists) return false;
 
       final duelData = duelDoc.data()!;
@@ -307,7 +311,7 @@ class DuelEngine {
         }
       }
 
-      await _firestore.collection('duels').doc(gameId).update(updateData);
+      await firestore.collection('duels').doc(gameId).update(updateData);
 
       // Check if both players have answered
       await _checkQuestionCompletion(gameId, questionIndex);
@@ -322,7 +326,7 @@ class DuelEngine {
   // Check if both players have answered the current question
   Future<void> _checkQuestionCompletion(String gameId, int questionIndex) async {
     try {
-      final duelDoc = await _firestore.collection('duels').doc(gameId).get();
+      final duelDoc = await firestore.collection('duels').doc(gameId).get();
       if (!duelDoc.exists) return;
 
       final duelData = duelDoc.data()!;
@@ -363,7 +367,7 @@ class DuelEngine {
         await _finishDuel(gameId);
       } else {
         // Move to next question
-        await _firestore.collection('duels').doc(gameId).update({
+        await firestore.collection('duels').doc(gameId).update({
           'currentQuestionIndex': nextQuestionIndex,
           'questionState': QuestionState.active.name,
           'questionStartTime': FieldValue.serverTimestamp(),
@@ -377,7 +381,7 @@ class DuelEngine {
   // Finish the duel and determine winner with cleanup
   Future<void> _finishDuel(String gameId) async {
     try {
-      final duelDoc = await _firestore.collection('duels').doc(gameId).get();
+      final duelDoc = await firestore.collection('duels').doc(gameId).get();
       if (!duelDoc.exists) return;
 
       final duelData = duelDoc.data()!;
@@ -409,7 +413,7 @@ class DuelEngine {
         }
       }
 
-      await _firestore.collection('duels').doc(gameId).update({
+      await firestore.collection('duels').doc(gameId).update({
         'state': DuelGameState.finished.name,
         'finishedAt': FieldValue.serverTimestamp(),
         'lastActivity': FieldValue.serverTimestamp(),
@@ -464,10 +468,10 @@ class DuelEngine {
 
       // Reset win streak if not winning
       if (winner != player1Id) {
-        await _firestore.collection('users').doc(player1Id).update({'duelStats.currentWinStreak': 0});
+        await firestore.collection('users').doc(player1Id).update({'duelStats.currentWinStreak': 0});
       }
 
-      await _firestore.collection('users').doc(player1Id).update(player1Updates);
+      await firestore.collection('users').doc(player1Id).update(player1Updates);
 
       // Update Player 2 stats
       final player2Updates = {
@@ -486,10 +490,10 @@ class DuelEngine {
 
       // Reset win streak if not winning
       if (winner != player2Id) {
-        await _firestore.collection('users').doc(player2Id).update({'duelStats.currentWinStreak': 0});
+        await firestore.collection('users').doc(player2Id).update({'duelStats.currentWinStreak': 0});
       }
 
-      await _firestore.collection('users').doc(player2Id).update(player2Updates);
+      await firestore.collection('users').doc(player2Id).update(player2Updates);
     } catch (e) {
       print('DuelEngine: Error updating player stats: $e');
     }
@@ -515,7 +519,7 @@ class DuelEngine {
 
   // Get duel stream for real-time updates
   Stream<DocumentSnapshot> getDuelStream(String gameId) {
-    return _firestore.collection('duels').doc(gameId).snapshots();
+    return firestore.collection('duels').doc(gameId).snapshots();
   }
 
   // Find available quick match
@@ -523,7 +527,7 @@ class DuelEngine {
     try {
       print('DuelEngine: Looking for quick match - $difficulty, $operator, $topicName');
 
-      final query = await _firestore
+      final query = await firestore
           .collection('duels')
           .where('state', isEqualTo: DuelGameState.waiting.name)
           .where('isQuickMatch', isEqualTo: true)
@@ -708,7 +712,7 @@ class DuelEngine {
     try {
       if (currentUserId == null) return;
 
-      final duelDoc = await _firestore.collection('duels').doc(gameId).get();
+      final duelDoc = await firestore.collection('duels').doc(gameId).get();
       if (!duelDoc.exists) {
         // Clean up session tracking even if game doesn't exist
         await _cleanupSession(gameId);
@@ -723,17 +727,17 @@ class DuelEngine {
         // Handle leaving before game starts
         if (players['player1']['userId'] == currentUserId && players['player2'] == null) {
           // Delete the game entirely
-          await _firestore.collection('duels').doc(gameId).delete();
+          await firestore.collection('duels').doc(gameId).delete();
         } else if (players['player2']?['userId'] == currentUserId) {
           // Remove player2
-          await _firestore.collection('duels').doc(gameId).update({
+          await firestore.collection('duels').doc(gameId).update({
             'players.player2': null,
             'state': DuelGameState.waiting.name,
             'lastActivity': FieldValue.serverTimestamp(),
           });
         } else if (players['player1']['userId'] == currentUserId && players['player2'] != null) {
           // Player1 leaving, transfer to player2 or delete
-          await _firestore.collection('duels').doc(gameId).delete();
+          await firestore.collection('duels').doc(gameId).delete();
         }
       } else if (state == DuelGameState.active.name) {
         // Handle leaving during active game - forfeit
@@ -741,7 +745,7 @@ class DuelEngine {
             ? players['player2']['userId']
             : players['player1']['userId'];
 
-        await _firestore.collection('duels').doc(gameId).update({
+        await firestore.collection('duels').doc(gameId).update({
           'state': DuelGameState.finished.name,
           'finishedAt': FieldValue.serverTimestamp(),
           'winner': winnerId,
@@ -765,7 +769,7 @@ class DuelEngine {
   Future<void> _cleanupSession(String gameId) async {
     try {
       // Remove from active sessions
-      final sessionRef = _realtimeDB.ref('activeSessions/$gameId');
+      final sessionRef = realtimeDB.ref('activeSessions/$gameId');
       await sessionRef.remove();
 
       // Cancel any subscriptions
