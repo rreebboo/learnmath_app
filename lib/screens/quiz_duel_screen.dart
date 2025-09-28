@@ -14,12 +14,14 @@ class QuizDuelScreen extends StatefulWidget {
   final String topicName;
   final String operator;
   final String difficulty;
+  final String? gameId; // Optional gameId for accepted challenges
 
   const QuizDuelScreen({
     super.key,
     required this.topicName,
     required this.operator,
     required this.difficulty,
+    this.gameId,
   });
 
   @override
@@ -79,7 +81,13 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
     _initializeAnimations();
     _initializeGameServices();
     _loadUserData();
-    _startQuickMatch();
+
+    // If gameId is provided, join existing game, otherwise start quick match
+    if (widget.gameId != null) {
+      _joinExistingGame(widget.gameId!);
+    } else {
+      _startQuickMatch();
+    }
   }
 
   Future<void> _initializeGameServices() async {
@@ -215,6 +223,43 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
       }
     } finally {
       _isMatchmakingInProgress = false;
+    }
+  }
+
+  // Join an existing accepted challenge game
+  Future<void> _joinExistingGame(String gameId) async {
+    try {
+      if (kDebugMode) {
+        print('QuizDuelScreen: Joining existing game: $gameId');
+      }
+
+      setState(() {
+        _gameId = gameId;
+        _isWaitingForOpponent = false; // We're joining an accepted challenge
+        _isReadyPhase = true; // Go directly to ready phase
+      });
+
+      // Subscribe to game updates
+      _subscribeToGameUpdates(gameId);
+
+      if (kDebugMode) {
+        print('QuizDuelScreen: Successfully joined existing game');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('QuizDuelScreen: Error joining existing game: $e');
+      }
+
+      // Fallback to showing error and going back
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to join challenge. Please try again.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        Navigator.pop(context);
+      }
     }
   }
 
@@ -568,12 +613,8 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
           ),
           TextButton(
             onPressed: () async {
-              final navigator = Navigator.of(context);
-              navigator.pop(); // Close confirmation dialog
-              await _leaveGame();
-              if (mounted) {
-                navigator.pop(); // Go back to main screen
-              }
+              // Immediate cleanup without complex async operations
+              _performImmediateLeave();
             },
             child: const Text('Leave'),
           ),
@@ -614,29 +655,124 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
     }
   }
 
-  // Clean game exit
-  Future<void> _leaveGame() async {
-    try {
-      // Leave the game service
-      if (_gameId != null) {
-        await _duelService.leaveDuel(_gameId!);
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error leaving game: $e');
-      }
+  // Immediate leave without waiting for async operations
+  void _performImmediateLeave() {
+    if (kDebugMode) {
+      print('_performImmediateLeave: Starting immediate leave process');
     }
 
-    // Cleanup is handled in dispose()
+    final navigator = Navigator.of(context);
+
+    try {
+      if (kDebugMode) {
+        print('_performImmediateLeave: Closing confirmation dialog');
+      }
+      // Close confirmation dialog immediately
+      navigator.pop();
+
+      if (kDebugMode) {
+        print('_performImmediateLeave: Cancelling subscriptions and timers');
+      }
+      // Immediately cancel all subscriptions and timers
+      _gameSubscription?.cancel();
+      _gameSubscription = null;
+
+      _questionTimer?.cancel();
+      _questionTimer = null;
+
+      _matchmakingTimer?.cancel();
+      _matchmakingTimer = null;
+
+      if (kDebugMode) {
+        print('_performImmediateLeave: Clearing game state');
+      }
+      // Mark the game as left locally
+      setState(() {
+        _gameId = null;
+        _duelData = null;
+        _isWaitingForOpponent = false;
+        _gameStarted = false;
+      });
+
+      if (kDebugMode) {
+        print('_performImmediateLeave: Navigating back to previous screen');
+      }
+      // Navigate back immediately
+      navigator.pop();
+
+      if (kDebugMode) {
+        print('_performImmediateLeave: Starting background cleanup');
+      }
+      // Perform cleanup in background (fire and forget)
+      _performBackgroundLeaveCleanup();
+
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error during immediate leave: $e');
+      }
+
+      // Force navigation if something went wrong
+      try {
+        navigator.popUntil((route) => route.isFirst);
+      } catch (navError) {
+        if (kDebugMode) {
+          print('Navigation error: $navError');
+        }
+      }
+    }
+  }
+
+  // Background cleanup - don't wait for this
+  void _performBackgroundLeaveCleanup() {
+    final gameIdToClean = _gameId; // Capture gameId before clearing it
+    if (gameIdToClean != null) {
+      _duelService.leaveDuel(gameIdToClean).catchError((e) {
+        if (kDebugMode) {
+          print('Background cleanup error for game $gameIdToClean: $e');
+        }
+      });
+    }
+  }
+
+  // Leave game with strict timeout to prevent hanging
+  Future<void> _performLeaveWithTimeout() async {
+    try {
+      if (_gameId != null) {
+        await _duelService.leaveDuel(_gameId!).timeout(
+          const Duration(seconds: 2), // Shorter timeout to prevent hanging
+          onTimeout: () {
+            if (kDebugMode) {
+              print('Leave game timed out after 2 seconds, proceeding with navigation');
+            }
+          },
+        );
+      }
+
+      // Cancel any active subscriptions immediately
+      _gameSubscription?.cancel();
+      _gameSubscription = null;
+
+      // Cancel timers
+      _questionTimer?.cancel();
+      _questionTimer = null;
+      _matchmakingTimer?.cancel();
+      _matchmakingTimer = null;
+
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error during leave cleanup: $e');
+      }
+      // Continue with navigation regardless of error
+    }
+  }
+
+  // Clean game exit (legacy method - kept for compatibility)
+  Future<void> _leaveGame() async {
+    await _performLeaveWithTimeout();
   }
 
   @override
   void dispose() {
-    // Leave the game if still active
-    if (_gameId != null && mounted) {
-      _leaveGame();
-    }
-
     // Cancel all timers first
     _questionTimer?.cancel();
     _questionTimer = null;
@@ -646,6 +782,15 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
     // Cancel stream subscription
     _gameSubscription?.cancel();
     _gameSubscription = null;
+
+    // Leave the game if still active (fire and forget - don't block dispose)
+    if (_gameId != null) {
+      _leaveGame().catchError((error) {
+        if (kDebugMode) {
+          print('Error during dispose leave game: $error');
+        }
+      });
+    }
 
     // Dispose all animation controllers
     _pulseController.dispose();
@@ -673,6 +818,7 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
+        // Always show quit confirmation to ensure proper cleanup
         _showQuitConfirmation();
       },
       child: Scaffold(
@@ -799,7 +945,11 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
         ),
         child: IconButton(
           onPressed: () {
-            _soundService.playButtonClick();
+            try {
+              _soundService.playButtonClick();
+            } catch (e) {
+              // Ignore sound errors
+            }
             _showQuitConfirmation();
           },
           icon: const Icon(
@@ -2216,15 +2366,37 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () async {
-                  // Close the dialog first
-                  Navigator.of(context).pop();
+                  final navigator = Navigator.of(context);
+                  try {
+                    // Close the dialog first
+                    navigator.pop();
 
-                  // Clean up the game session
-                  await _leaveGame();
+                    // Show loading indicator while leaving
+                    showDialog(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (context) => const Center(
+                        child: CircularProgressIndicator(),
+                      ),
+                    );
 
-                  // Go back to main screen
-                  if (mounted) {
-                    Navigator.of(context).pop();
+                    // Clean up the game session
+                    await _leaveGame();
+
+                    // Close loading dialog and go back to main screen
+                    if (mounted) {
+                      navigator.pop(); // Close loading dialog
+                      navigator.pop(); // Go back to main screen
+                    }
+                  } catch (e) {
+                    if (kDebugMode) {
+                      print('Error during game end cleanup: $e');
+                    }
+                    // Even if there's an error, still navigate back
+                    if (mounted) {
+                      navigator.pop(); // Close any open dialog
+                      navigator.pop(); // Go back to main screen
+                    }
                   }
                 },
                 style: ElevatedButton.styleFrom(

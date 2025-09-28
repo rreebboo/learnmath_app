@@ -103,6 +103,21 @@ service cloud.firestore {
       match /friendRequests/{requestId} {
         allow read, write: if isAuthenticated() && isOwner(userId);
       }
+
+      // Notifications subcollection - allow authenticated users to send notifications to others
+      match /notifications/{notificationId} {
+        // Users can read their own notifications
+        allow read: if isAuthenticated() && isOwner(userId);
+
+        // Authenticated users can create notifications for others (for friend requests, challenges, etc.)
+        allow create: if isAuthenticated();
+
+        // Users can update their own notifications (mark as read, etc.)
+        allow update: if isAuthenticated() && isOwner(userId);
+
+        // Users can delete their own notifications
+        allow delete: if isAuthenticated() && isOwner(userId);
+      }
     }
 
     // Achievements - read only for authenticated users

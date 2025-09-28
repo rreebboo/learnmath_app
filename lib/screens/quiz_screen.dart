@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../services/firestore_service.dart';
 import '../services/friends_service.dart';
+import '../services/quiz_duel_service.dart';
+import '../services/floating_challenge_service.dart';
 import '../widgets/user_avatar.dart';
 import 'friends_screen.dart';
 import 'quiz_duel_screen.dart';
@@ -1664,26 +1666,78 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
     );
   }
 
-  void _sendFriendChallenge(Map<String, dynamic> friend, String difficulty, String operator) {
-    // For now, show a success message and start a regular duel
-    // TODO: Implement actual friend challenge system with invitations
+  void _sendFriendChallenge(Map<String, dynamic> friend, String difficulty, String operator) async {
+    try {
+      // Use the quiz duel service to create a friend challenge
+      final QuizDuelService duelService = QuizDuelService();
+      final gameId = await duelService.challengeFriend(
+        friendId: friend['id'],
+        difficulty: difficulty,
+        operator: operator,
+        topicName: 'Mixed Operations', // You can make this configurable
+      );
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            Icon(Icons.check_circle, color: Colors.white),
-            SizedBox(width: 8),
-            Text('Challenge sent to ${friend['name']}!'),
-          ],
+      if (gameId != null) {
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 8),
+                Text('Challenge sent to ${friend['name']}!'),
+              ],
+            ),
+            backgroundColor: Color(0xFF7ED321),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+
+        // Show floating challenge widget
+        FloatingChallengeService().showFloatingChallenge(
+          context,
+          FloatingChallengeData(
+            friendId: friend['id'],
+            friendName: friend['name'],
+            friendAvatar: friend['avatar'] ?? '🦊',
+            topicName: 'Mixed Operations',
+            operator: operator,
+            difficulty: difficulty,
+            gameId: gameId,
+          ),
+        );
+      } else {
+        // Show error message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.error, color: Colors.white),
+                SizedBox(width: 8),
+                Text('Failed to send challenge. Please try again.'),
+              ],
+            ),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      // Handle error
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.error, color: Colors.white),
+              SizedBox(width: 8),
+              Text('Error sending challenge: $e'),
+            ],
+          ),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
         ),
-        backgroundColor: Color(0xFF7ED321),
-        duration: const Duration(seconds: 3),
-      ),
-    );
-
-    // Start the duel (for now using regular duel screen)
-    _startQuizDuel(difficulty, operator);
+      );
+    }
   }
 
   void _showComingSoonDialog(String feature) {

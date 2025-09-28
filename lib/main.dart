@@ -4,6 +4,7 @@ import 'services/auth_service.dart';
 import 'services/user_statistics_service.dart';
 import 'services/app_initialization_service.dart';
 import 'services/friends_service.dart';
+import 'services/global_notification_listener.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -127,7 +128,9 @@ class AuthWrapper extends StatelessWidget {
               print('Error initializing user data: $e');
             }
           });
-          return const HomeScreen();
+          return const GlobalNotificationListener(
+            child: HomeScreen(),
+          );
         } else {
           // User is not signed in
           return const SplashScreen();

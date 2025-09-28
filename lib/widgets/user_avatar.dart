@@ -115,7 +115,10 @@ class UserAvatar extends StatelessWidget {
             : Center(
                 child: Text(
                   avatar,
-                  style: TextStyle(fontSize: size * 0.5),
+                  style: TextStyle(
+                    fontSize: size * 0.5,
+                    decoration: TextDecoration.none,
+                  ),
                 ),
               ),
       ),

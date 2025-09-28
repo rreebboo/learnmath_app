@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'dart:async';
+import 'notification_service.dart';
 
 class FriendsService {
   static final FriendsService _instance = FriendsService._internal();
@@ -12,6 +13,7 @@ class FriendsService {
   FirebaseFirestore? _firestoreInstance;
   FirebaseAuth? _authInstance;
   FirebaseDatabase? _realtimeDBInstance;
+  final NotificationService _notificationService = NotificationService();
 
   FirebaseFirestore get firestore => _firestoreInstance ??= FirebaseFirestore.instance;
   FirebaseAuth get auth => _authInstance ??= FirebaseAuth.instance;
@@ -351,6 +353,18 @@ class FriendsService {
       
       print('FriendsService: Committing batch write to Firestore...');
       await batch.commit();
+
+      // Send notification to the target user
+      final currentUserData = currentUserDoc.data() as Map<String, dynamic>;
+      final currentUserName = currentUserData['name'] ?? 'Someone';
+      final currentUserAvatar = currentUserData['avatar'] ?? '🦊';
+
+      await _notificationService.sendFriendRequestNotification(
+        toUserId: toUserId,
+        fromUserName: currentUserName,
+        fromUserAvatar: currentUserAvatar,
+      );
+
       print('FriendsService: ✅ Friend request sent successfully!');
       return true;
     } catch (e, stackTrace) {
@@ -652,10 +666,22 @@ class FriendsService {
   // Challenge friend to duel
   Future<bool> challengeFriend(String friendId, {String gameMode = 'quick'}) async {
     if (currentUserId == null) return false;
-    
+
     try {
+      // Get current user data for the notification
+      final currentUserDoc = await firestore
+          .collection('users')
+          .doc(currentUserId)
+          .get();
+
+      if (!currentUserDoc.exists) return false;
+
+      final currentUserData = currentUserDoc.data() as Map<String, dynamic>;
+      final currentUserName = currentUserData['name'] ?? 'Someone';
+      final currentUserAvatar = currentUserData['avatar'] ?? '🦊';
+
       // Create a duel challenge
-      await firestore
+      final challengeDoc = await firestore
           .collection('challenges')
           .add({
         'fromUserId': currentUserId,
@@ -667,10 +693,18 @@ class FriendsService {
           DateTime.now().add(const Duration(minutes: 10)),
         ),
       });
-      
+
+      // Send notification to the friend
+      await _notificationService.sendDuelChallengeNotification(
+        toUserId: friendId,
+        fromUserName: currentUserName,
+        fromUserAvatar: currentUserAvatar,
+        duelId: challengeDoc.id,
+      );
+
       return true;
     } catch (e) {
-      // print('Error sending challenge: $e');
+      print('Error sending challenge: $e');
       return false;
     }
   }

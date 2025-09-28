@@ -2,7 +2,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/friends_service.dart';
 import '../services/firestore_service.dart';
+import '../services/quiz_duel_service.dart';
+import '../services/floating_challenge_service.dart';
 import '../widgets/user_avatar.dart';
+import '../widgets/floating_challenge_widget.dart';
 
 class FriendsScreen extends StatefulWidget {
   const FriendsScreen({super.key});
@@ -21,6 +24,10 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
   bool _isSearching = false;
   final Map<String, bool> _sendingRequests = {};
   Map<String, String> _relationshipStatus = {}; // 'friends', 'pending', 'none'
+
+  // Active challenge tracking
+  Map<String, dynamic>? _activeChallenge;
+  String? _activeChallengeGameId;
 
   @override
   void initState() {
@@ -187,7 +194,9 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
     final screenWidth = MediaQuery.of(context).size.width;
     final isSmallScreen = screenWidth < 360;
     
-    return Scaffold(
+    return Stack(
+      children: [
+        Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
         backgroundColor: const Color(0xFFF5F7FA),
@@ -280,6 +289,26 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
           _buildFindTab(),
         ],
       ),
+    ),
+
+        // Floating Challenge Widget
+        if (_activeChallenge != null && _activeChallengeGameId != null)
+          FloatingChallengeWidget(
+            friendId: _activeChallenge!['id'],
+            friendName: _activeChallenge!['name'],
+            friendAvatar: _activeChallenge!['avatar'] ?? '👤',
+            topicName: 'Mixed Operations',
+            operator: 'mixed',
+            difficulty: 'medium',
+            gameId: _activeChallengeGameId!,
+            onCancel: () {
+              setState(() {
+                _activeChallenge = null;
+                _activeChallengeGameId = null;
+              });
+            },
+          ),
+      ],
     );
   }
 
@@ -1062,26 +1091,76 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
             onPressed: () async {
               final navigator = Navigator.of(context);
               final scaffoldMessenger = ScaffoldMessenger.of(context);
-              navigator.pop();
-              final success = await _friendsService.challengeFriend(friend['id']);
-              if (success) {
+              navigator.pop(); // Close the dialog first
+
+              try {
+                print('FriendsScreen: Challenging friend ${friend['name']} (${friend['id']})');
+
+                // Use the quiz duel service for consistency
+                final QuizDuelService duelService = QuizDuelService();
+                final gameId = await duelService.challengeFriend(
+                  friendId: friend['id'],
+                  difficulty: 'medium', // Default difficulty
+                  operator: 'mixed', // Default to mixed operations
+                  topicName: 'Mixed Operations',
+                );
+
+                print('FriendsScreen: Challenge result - gameId: $gameId');
+
+                if (gameId != null) {
+                  // Store active challenge info
+                  setState(() {
+                    _activeChallenge = friend;
+                    _activeChallengeGameId = gameId;
+                  });
+
+                  // Show success message
+                  scaffoldMessenger.showSnackBar(
+                    SnackBar(
+                      content: Row(
+                        children: [
+                          Icon(Icons.check_circle, color: Colors.white),
+                          SizedBox(width: 8),
+                          Text('Challenge sent to ${friend['name']}!'),
+                        ],
+                      ),
+                      backgroundColor: Color(0xFF7ED321),
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+
+                  // Show floating challenge widget
+                  FloatingChallengeService().showFloatingChallenge(
+                    context,
+                    FloatingChallengeData(
+                      friendId: friend['id'],
+                      friendName: friend['name'],
+                      friendAvatar: friend['avatar'] ?? '🦊',
+                      topicName: 'Mixed Operations',
+                      operator: 'mixed',
+                      difficulty: 'medium',
+                      gameId: gameId,
+                    ),
+                  );
+
+                  // Go back to previous screen so floating widget is visible
+                  navigator.pop();
+                } else {
+                  if (mounted) {
+                    scaffoldMessenger.showSnackBar(
+                      const SnackBar(
+                        content: Text('Failed to send challenge. Please try again.'),
+                        backgroundColor: Colors.red,
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  }
+                }
+              } catch (e) {
                 if (mounted) {
                   scaffoldMessenger.showSnackBar(
                     SnackBar(
-                      content: Text('Challenge sent to ${friend['name']}!'),
-                      backgroundColor: const Color(0xFF7ED321),
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                  );
-                }
-              } else {
-                if (mounted) {
-                  scaffoldMessenger.showSnackBar(
-                    const SnackBar(
-                      content: Text('Failed to send challenge. Please try again.'),
+                      content: Text('Error sending challenge: $e'),
                       backgroundColor: Colors.red,
                       behavior: SnackBarBehavior.floating,
                     ),

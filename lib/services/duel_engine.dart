@@ -53,7 +53,7 @@ class DuelEngine {
         'finishedAt': null,
         'lastActivity': FieldValue.serverTimestamp(),
 
-        // Players
+        // Players - for friend challenges, don't auto-add player2
         'players': {
           'player1': {
             'userId': currentUserId,
@@ -63,15 +63,16 @@ class DuelEngine {
             'answers': [],
             'currentQuestion': 0,
           },
-          'player2': friendId != null ? {
-            'userId': friendId,
-            'score': 0,
-            'hearts': 5,
-            'ready': false,
-            'answers': [],
-            'currentQuestion': 0,
-          } : null,
+          'player2': null, // Always start as null - friend must accept first
         },
+
+        // Challenge data (for friend challenges)
+        'challengeData': friendId != null ? {
+          'challengerId': currentUserId,
+          'challengedId': friendId,
+          'status': 'pending', // pending, accepted, declined
+          'sentAt': FieldValue.serverTimestamp(),
+        } : null,
 
         // Game Data
         'currentQuestionIndex': 0,
@@ -162,6 +163,102 @@ class DuelEngine {
       return true;
     } catch (e) {
       print('DuelEngine: Error joining duel: $e');
+      return false;
+    }
+  }
+
+  // Accept a friend challenge
+  Future<bool> acceptFriendChallenge(String gameId) async {
+    try {
+      if (currentUserId == null) return false;
+
+      print('DuelEngine: Accepting friend challenge $gameId');
+
+      // First check if game still exists and is valid
+      final gameDoc = await firestore.collection('duels').doc(gameId).get();
+      if (!gameDoc.exists) {
+        print('DuelEngine: Challenge $gameId no longer exists');
+        return false;
+      }
+
+      final gameData = gameDoc.data()!;
+      final challengeData = gameData['challengeData'] as Map<String, dynamic>?;
+
+      if (challengeData == null) {
+        print('DuelEngine: Not a friend challenge');
+        return false;
+      }
+
+      if (challengeData['challengedId'] != currentUserId) {
+        print('DuelEngine: Challenge not for current user');
+        return false;
+      }
+
+      if (challengeData['status'] != 'pending') {
+        print('DuelEngine: Challenge is not pending: ${challengeData['status']}');
+        return false;
+      }
+
+      // Accept the challenge by adding player2 and updating status
+      await firestore.collection('duels').doc(gameId).update({
+        'players.player2': {
+          'userId': currentUserId,
+          'score': 0,
+          'hearts': 5,
+          'ready': false,
+          'answers': [],
+          'currentQuestion': 0,
+        },
+        'challengeData.status': 'accepted',
+        'challengeData.acceptedAt': FieldValue.serverTimestamp(),
+        'state': DuelGameState.ready.name,
+        'lastActivity': FieldValue.serverTimestamp(),
+      });
+
+      // Update session tracking
+      await _updateSessionActivity(gameId);
+
+      print('DuelEngine: Challenge accepted successfully');
+      return true;
+    } catch (e) {
+      print('DuelEngine: Error accepting challenge: $e');
+      return false;
+    }
+  }
+
+  // Decline a friend challenge
+  Future<bool> declineFriendChallenge(String gameId) async {
+    try {
+      if (currentUserId == null) return false;
+
+      print('DuelEngine: Declining friend challenge $gameId');
+
+      // First check if game still exists and is valid
+      final gameDoc = await firestore.collection('duels').doc(gameId).get();
+      if (!gameDoc.exists) {
+        print('DuelEngine: Challenge $gameId no longer exists');
+        return false;
+      }
+
+      final gameData = gameDoc.data()!;
+      final challengeData = gameData['challengeData'] as Map<String, dynamic>?;
+
+      if (challengeData == null || challengeData['challengedId'] != currentUserId) {
+        print('DuelEngine: Invalid challenge or not for current user');
+        return false;
+      }
+
+      // Mark challenge as declined and delete the game
+      await firestore.collection('duels').doc(gameId).update({
+        'challengeData.status': 'declined',
+        'challengeData.declinedAt': FieldValue.serverTimestamp(),
+        'state': 'declined',
+      });
+
+      print('DuelEngine: Challenge declined successfully');
+      return true;
+    } catch (e) {
+      print('DuelEngine: Error declining challenge: $e');
       return false;
     }
   }

@@ -3,6 +3,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:async';
 import 'duel_engine.dart';
+import 'notification_service.dart';
 
 class QuizDuelService {
   // Lazy initialization to avoid Firebase access before initialization
@@ -10,11 +11,13 @@ class QuizDuelService {
   FirebaseFirestore? _firestoreInstance;
   FirebaseDatabase? _realtimeDBInstance;
   FirebaseAuth? _authInstance;
+  NotificationService? _notificationServiceInstance;
 
   DuelEngine get duelEngine => _duelEngineInstance ??= DuelEngine();
   FirebaseFirestore get firestore => _firestoreInstance ??= FirebaseFirestore.instance;
   FirebaseDatabase get realtimeDB => _realtimeDBInstance ??= FirebaseDatabase.instance;
   FirebaseAuth get auth => _authInstance ??= FirebaseAuth.instance;
+  NotificationService get notificationService => _notificationServiceInstance ??= NotificationService();
 
   String? get currentUserId => auth.currentUser?.uid;
   StreamSubscription<DatabaseEvent>? _presenceSubscription;
@@ -75,6 +78,11 @@ class QuizDuelService {
     required String topicName,
   }) async {
     try {
+      if (currentUserId == null) {
+        print('QuizDuelService: Cannot challenge friend - user not authenticated');
+        return null;
+      }
+
       print('QuizDuelService: Creating friend challenge...');
 
       final gameId = await duelEngine.createDuel(
@@ -83,6 +91,33 @@ class QuizDuelService {
         topicName: topicName,
         friendId: friendId,
       );
+
+      if (gameId != null) {
+        // Get current user's data for the notification
+        try {
+          final currentUserDoc = await firestore.collection('users').doc(currentUserId).get();
+          if (currentUserDoc.exists) {
+            final currentUserData = currentUserDoc.data() as Map<String, dynamic>;
+            final currentUserName = currentUserData['name'] ?? 'Someone';
+            final currentUserAvatar = currentUserData['avatar'] ?? '🦊';
+
+            // Send notification to the challenged friend
+            await notificationService.sendDuelChallengeNotification(
+              toUserId: friendId,
+              fromUserName: currentUserName,
+              fromUserAvatar: currentUserAvatar,
+              duelId: gameId,
+              difficulty: difficulty,
+              topicName: topicName,
+            );
+
+            print('QuizDuelService: Challenge notification sent to $friendId');
+          }
+        } catch (e) {
+          print('QuizDuelService: Error sending notification: $e');
+          // Continue even if notification fails - the game is still created
+        }
+      }
 
       // Note: Friend needs to accept the challenge before the game starts
       return gameId;
@@ -95,16 +130,32 @@ class QuizDuelService {
   // Accept a friend challenge
   Future<bool> acceptChallenge(String gameId) async {
     try {
-      print('QuizDuelService: Accepting challenge: $gameId');
+      print('QuizDuelService: Accepting friend challenge: $gameId');
 
-      // Join the game and go to ready phase - don't auto-start
-      final success = await duelEngine.joinDuel(gameId);
+      // Use the proper friend challenge acceptance method
+      final success = await duelEngine.acceptFriendChallenge(gameId);
       if (success) {
-        print('QuizDuelService: Challenge accepted, now in ready phase');
+        print('QuizDuelService: Friend challenge accepted, now in ready phase');
       }
       return success;
     } catch (e) {
       print('QuizDuelService: Error accepting challenge: $e');
+      return false;
+    }
+  }
+
+  // Decline a friend challenge
+  Future<bool> declineChallenge(String gameId) async {
+    try {
+      print('QuizDuelService: Declining friend challenge: $gameId');
+
+      final success = await duelEngine.declineFriendChallenge(gameId);
+      if (success) {
+        print('QuizDuelService: Friend challenge declined');
+      }
+      return success;
+    } catch (e) {
+      print('QuizDuelService: Error declining challenge: $e');
       return false;
     }
   }

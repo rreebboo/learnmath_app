@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'auth_service.dart';
+import 'achievement_service.dart';
 
 class UserStatisticsService {
   static const String _statsKeyPrefix = 'user_statistics_';
@@ -11,6 +12,7 @@ class UserStatisticsService {
   UserStatisticsService._internal();
 
   final AuthService _authService = AuthService();
+  final AchievementService _achievementService = AchievementService();
 
   // Real-time statistics
   int totalSessions = 0;
@@ -129,6 +131,14 @@ class UserStatisticsService {
 
     // Save to persistent storage
     await saveStatistics();
+
+    // Check for achievements
+    await _achievementService.checkAchievements(
+      correctAnswers: correctAnswers,
+      streak: currentStreak,
+      totalScore: totalScore,
+      perfectQuiz: questions > 0 && correctAnswers == questions,
+    );
   }
 
   // Getters for common statistics
