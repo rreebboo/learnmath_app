@@ -32,7 +32,10 @@ class AchievementService {
       if (!userDoc.exists) return;
 
       final userData = userDoc.data()!;
-      final unlockedAchievements = List<String>.from(userData['achievements'] ?? []);
+      final achievementData = userData['achievements'] as List<dynamic>? ?? [];
+      final unlockedAchievements = achievementData
+          .map((achievement) => achievement is String ? achievement : achievement['id'] as String)
+          .toList();
 
       // Check various achievements
       await _checkScoreAchievements(totalScore ?? userData['totalScore'] ?? 0, unlockedAchievements);
@@ -109,9 +112,13 @@ class AchievementService {
     if (currentUserId == null) return;
 
     try {
-      // Add achievement to user's collection
+      // Add achievement to user's collection as an object
       await _firestore.collection('users').doc(currentUserId!).update({
-        'achievements': FieldValue.arrayUnion([achievementId]),
+        'achievements': FieldValue.arrayUnion([{
+          'id': achievementId,
+          'title': title,
+          'earnedAt': FieldValue.serverTimestamp(),
+        }]),
       });
 
       // Note: User data can be retrieved if needed for future notification customization
@@ -142,7 +149,10 @@ class AchievementService {
       final userDoc = await _firestore.collection('users').doc(currentUserId!).get();
       if (userDoc.exists) {
         final userData = userDoc.data()!;
-        return List<String>.from(userData['achievements'] ?? []);
+        final achievementData = userData['achievements'] as List<dynamic>? ?? [];
+        return achievementData
+            .map((achievement) => achievement is String ? achievement : achievement['id'] as String)
+            .toList();
       }
     } catch (e) {
       print('Error getting user achievements: $e');

@@ -47,7 +47,7 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
             final userData = userDataDoc.data() as Map<String, dynamic>?;
             final achievementsData = userData?['achievements'] as List<dynamic>? ?? [];
             final newUserAchievements = achievementsData
-                .map((achievement) => achievement['id'] as String)
+                .map((achievement) => achievement is String ? achievement : achievement['id'] as String)
                 .toList();
 
             setState(() {
@@ -84,7 +84,7 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
         final userData = await _firestoreService.getUserData(currentUserId);
         final achievementsData = userData?['achievements'] as List<dynamic>? ?? [];
         final userAchievements = achievementsData
-            .map((achievement) => achievement['id'] as String)
+            .map((achievement) => achievement is String ? achievement : achievement['id'] as String)
             .toList();
 
         setState(() {

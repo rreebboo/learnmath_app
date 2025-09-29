@@ -258,6 +258,9 @@ class _FloatingChallengeWidgetState extends State<FloatingChallengeWidget>
       final challengeStatus = challengeData['status'] as String?;
 
       if (challengeStatus == 'accepted' && !_challengeAccepted) {
+        if (kDebugMode) {
+          print('FloatingChallenge: Challenge accepted! Switching to accepted state.');
+        }
         setState(() {
           _challengeAccepted = true;
         });
@@ -298,9 +301,13 @@ class _FloatingChallengeWidgetState extends State<FloatingChallengeWidget>
           _challengeDeclined = true;
         });
 
-        // Show declined state for a few seconds before dismissing
-        Timer(const Duration(milliseconds: 2500), () {
+        // Show declined state for a few seconds before dismissing with animation
+        Timer(const Duration(milliseconds: 2500), () async {
           if (mounted) {
+            setState(() {
+              _isClosing = true;
+            });
+            await _closeController.forward();
             widget.onCancel?.call();
           }
         });
@@ -530,7 +537,7 @@ class _FloatingChallengeWidgetState extends State<FloatingChallengeWidget>
           UserAvatar(
             avatar: widget.friendAvatar,
             size: avatarSize,
-            gradientColors: const [const Color(0xFF4CAF50), Color(0xFF66BB6A)],
+            gradientColors: const [Color(0xFF4CAF50), Color(0xFF66BB6A)],
           ),
           const SizedBox(width: 8),
           Flexible(
@@ -590,7 +597,7 @@ class _FloatingChallengeWidgetState extends State<FloatingChallengeWidget>
                 UserAvatar(
                   avatar: widget.friendAvatar,
                   size: isSmallScreen ? 32.0 : 36.0,
-                  gradientColors: const [const Color(0xFF4CAF50), Color(0xFF66BB6A)],
+                  gradientColors: const [Color(0xFF4CAF50), Color(0xFF66BB6A)],
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -665,7 +672,7 @@ class _FloatingChallengeWidgetState extends State<FloatingChallengeWidget>
                         child: Text(
                           widget.topicName,
                           style: const TextStyle(
-                            color: const Color(0xFF4CAF50),
+                            color: Color(0xFF4CAF50),
                             fontWeight: FontWeight.w700,
                             fontSize: 12,
                             decoration: TextDecoration.none,
@@ -694,7 +701,7 @@ class _FloatingChallengeWidgetState extends State<FloatingChallengeWidget>
                         child: Text(
                           widget.difficulty.toUpperCase(),
                           style: const TextStyle(
-                            color: const Color(0xFF4CAF50),
+                            color: Color(0xFF4CAF50),
                             fontWeight: FontWeight.w700,
                             fontSize: 10,
                             decoration: TextDecoration.none,
@@ -716,7 +723,7 @@ class _FloatingChallengeWidgetState extends State<FloatingChallengeWidget>
                       angle: _pulseController.value * 2 * 3.14159,
                       child: const Icon(
                         Icons.hourglass_empty,
-                        color: const Color(0xFF4CAF50),
+                        color: Color(0xFF4CAF50),
                         size: 16,
                       ),
                     );
@@ -728,7 +735,7 @@ class _FloatingChallengeWidgetState extends State<FloatingChallengeWidget>
                     'Waiting ${_getWaitingTimeText()}',
                     style: const TextStyle(
                       fontSize: 13,
-                      color: const Color(0xFF4CAF50),
+                      color: Color(0xFF4CAF50),
                       fontWeight: FontWeight.w700,
                       decoration: TextDecoration.none,
                     ),
@@ -800,18 +807,47 @@ class _FloatingChallengeWidgetState extends State<FloatingChallengeWidget>
       top: _position.dy,
       left: _position.dx,
       child: GestureDetector(
-        onTap: () {
+        onTap: () async {
           if (!_isDragging) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => QuizDuelScreen(
-                  topicName: widget.topicName,
-                  operator: widget.operator,
-                  difficulty: widget.difficulty,
+            if (kDebugMode) {
+              print('FloatingChallenge: Tapped accepted challenge, navigating to QuizDuelScreen with gameId: ${widget.gameId}');
+            }
+
+            // Navigate first while context is still valid
+            if (mounted && context.mounted) {
+              // Navigate to the waiting section (ready phase) when challenge is accepted
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => QuizDuelScreen(
+                    topicName: widget.topicName,
+                    operator: widget.operator,
+                    difficulty: widget.difficulty,
+                    gameId: widget.gameId, // Include the gameId for accepted challenge
+                  ),
                 ),
-              ),
-            );
+              ).then((_) {
+                if (kDebugMode) {
+                  print('FloatingChallenge: Navigation to QuizDuelScreen completed');
+                }
+              });
+
+              // Small delay to ensure navigation starts, then dismiss widget
+              await Future.delayed(const Duration(milliseconds: 100));
+
+              // Start closing animation for smooth dismissal
+              if (mounted) {
+                setState(() {
+                  _isClosing = true;
+                });
+
+                // Play close animation briefly
+                _closeController.forward();
+
+                // Dismiss the floating widget after navigation
+                widget.onCancel?.call();
+              }
+            }
           }
         },
         onPanStart: _onPanStart,
@@ -893,8 +929,15 @@ class _FloatingChallengeWidgetState extends State<FloatingChallengeWidget>
       top: _position.dy,
       left: _position.dx,
       child: GestureDetector(
-        onTap: () {
+        onTap: () async {
           if (!_isDragging) {
+            // Start closing animation
+            setState(() {
+              _isClosing = true;
+            });
+
+            // Play close animation then dismiss
+            await _closeController.forward();
             widget.onCancel?.call();
           }
         },

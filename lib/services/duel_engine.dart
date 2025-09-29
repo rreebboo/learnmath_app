@@ -842,6 +842,8 @@ class DuelEngine {
             ? players['player2']['userId']
             : players['player1']['userId'];
 
+        print('DuelEngine: Player $currentUserId forfeiting active game. Winner: $winnerId');
+
         await firestore.collection('duels').doc(gameId).update({
           'state': DuelGameState.finished.name,
           'finishedAt': FieldValue.serverTimestamp(),
@@ -849,7 +851,10 @@ class DuelEngine {
           'isDraw': false,
           'forfeit': true,
           'forfeitBy': currentUserId,
+          'lastActivity': FieldValue.serverTimestamp(),
         });
+
+        print('DuelEngine: Forfeit successfully recorded in Firestore');
       }
 
       // Clean up all resources

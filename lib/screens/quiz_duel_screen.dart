@@ -78,6 +78,8 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
   @override
   void initState() {
     super.initState();
+
+
     _initializeAnimations();
     _initializeGameServices();
     _loadUserData();
@@ -235,8 +237,9 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
 
       setState(() {
         _gameId = gameId;
-        _isWaitingForOpponent = false; // We're joining an accepted challenge
-        _isReadyPhase = true; // Go directly to ready phase
+        _isWaitingForOpponent = false; // Not waiting for opponent anymore - challenge accepted
+        _isReadyPhase = true; // Go directly to ready phase where players confirm readiness
+        _gameStarted = false; // Game hasn't started yet
       });
 
       // Subscribe to game updates
@@ -365,35 +368,35 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
         _currentQuestionIndex = newQuestionIndex;
       }
 
-    switch (state) {
-      case 'waiting':
-        _isWaitingForOpponent = true;
-        _gameStarted = false;
-        _isReadyPhase = false;
-        break;
-      case 'ready':
-        _isWaitingForOpponent = true; // Keep waiting state true for unified screen
-        _gameStarted = false;
-        _isReadyPhase = true;
-        _matchmakingTimer?.cancel();
+      switch (state) {
+        case 'waiting':
+          _isWaitingForOpponent = true;
+          _gameStarted = false;
+          _isReadyPhase = false;
+          break;
+        case 'ready':
+          _isWaitingForOpponent = true; // Keep waiting state true for unified screen
+          _gameStarted = false;
+          _isReadyPhase = true;
+          _matchmakingTimer?.cancel();
 
-        if (kDebugMode) {
-          print('Ready phase: Current user ready: $_currentUserReady, Opponent ready: $_opponentReady');
-        }
-        break;
-      case 'active':
-        _isWaitingForOpponent = false;
-        _gameStarted = true;
-        _isReadyPhase = false;
-        _matchmakingTimer?.cancel();
+          if (kDebugMode) {
+            print('Ready phase: Current user ready: $_currentUserReady, Opponent ready: $_opponentReady');
+          }
+          break;
+        case 'active':
+          _isWaitingForOpponent = false;
+          _gameStarted = true;
+          _isReadyPhase = false;
+          _matchmakingTimer?.cancel();
 
-        // Game is now active, starting question timer
-        _startQuestionTimer();
-        break;
-      case 'finished':
-        _questionTimer?.cancel();
-        _showGameEndDialog();
-        break;
+          // Game is now active, starting question timer
+          _startQuestionTimer();
+          break;
+        case 'finished':
+          _questionTimer?.cancel();
+          _showGameEndDialog();
+          break;
       }
 
       // CRITICAL FIX: Call setState to rebuild the UI after state changes
@@ -583,6 +586,8 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
 
     final winner = _duelData!['winner'];
     final isDraw = _duelData!['isDraw'] ?? false;
+    final forfeit = _duelData!['forfeit'] ?? false;
+    final forfeitBy = _duelData!['forfeitBy'];
     final currentUserId = _duelService.currentUserId;
     final currentUserScore = _currentUserData?['score'] ?? 0;
     final opponentScore = _opponentData?['score'] ?? 0;
@@ -593,7 +598,7 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
       barrierDismissible: false,
       builder: (context) => PopScope(
         canPop: false, // Prevent back button during dialog
-        child: _buildGameEndDialog(isWinner, isDraw, currentUserScore, opponentScore),
+        child: _buildGameEndDialog(isWinner, isDraw, currentUserScore, opponentScore, forfeit: forfeit, forfeitBy: forfeitBy),
       ),
     );
   }
@@ -671,22 +676,23 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
       navigator.pop();
 
       if (kDebugMode) {
-        print('_performImmediateLeave: Cancelling subscriptions and timers');
+        print('_performImmediateLeave: Processing forfeit and cleanup');
       }
-      // Immediately cancel all subscriptions and timers
-      _gameSubscription?.cancel();
-      _gameSubscription = null;
 
+      // Capture gameId before clearing state
+      final gameIdToLeave = _gameId;
+
+      // Cancel timers and subscriptions
       _questionTimer?.cancel();
       _questionTimer = null;
 
       _matchmakingTimer?.cancel();
       _matchmakingTimer = null;
 
-      if (kDebugMode) {
-        print('_performImmediateLeave: Clearing game state');
-      }
-      // Mark the game as left locally
+      _gameSubscription?.cancel();
+      _gameSubscription = null;
+
+      // Clear local state
       setState(() {
         _gameId = null;
         _duelData = null;
@@ -694,17 +700,23 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
         _gameStarted = false;
       });
 
+      // Navigate back immediately
       if (kDebugMode) {
         print('_performImmediateLeave: Navigating back to previous screen');
       }
-      // Navigate back immediately
       navigator.pop();
 
-      if (kDebugMode) {
-        print('_performImmediateLeave: Starting background cleanup');
+      // Process the forfeit immediately (not in background) so opponent gets notified
+      if (gameIdToLeave != null) {
+        if (kDebugMode) {
+          print('_performImmediateLeave: Processing forfeit for game $gameIdToLeave');
+        }
+        _duelService.leaveDuel(gameIdToLeave).catchError((e) {
+          if (kDebugMode) {
+            print('Forfeit processing error for game $gameIdToLeave: $e');
+          }
+        });
       }
-      // Perform cleanup in background (fire and forget)
-      _performBackgroundLeaveCleanup();
 
     } catch (e) {
       if (kDebugMode) {
@@ -722,17 +734,6 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
     }
   }
 
-  // Background cleanup - don't wait for this
-  void _performBackgroundLeaveCleanup() {
-    final gameIdToClean = _gameId; // Capture gameId before clearing it
-    if (gameIdToClean != null) {
-      _duelService.leaveDuel(gameIdToClean).catchError((e) {
-        if (kDebugMode) {
-          print('Background cleanup error for game $gameIdToClean: $e');
-        }
-      });
-    }
-  }
 
   // Leave game with strict timeout to prevent hanging
   Future<void> _performLeaveWithTimeout() async {
@@ -1716,10 +1717,16 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
     final userWinning = currentUserScore > opponentScore;
     final isDraw = currentUserScore == opponentScore;
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isSmallScreen = MediaQuery.of(context).size.width < 360;
+        final horizontalMargin = isSmallScreen ? 12.0 : 20.0;
+        final containerPadding = isSmallScreen ? 12.0 : 20.0;
+
+        return Container(
+          margin: EdgeInsets.symmetric(horizontal: horizontalMargin, vertical: 12),
+          padding: EdgeInsets.all(containerPadding),
+          decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
@@ -1730,7 +1737,7 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
           ),
         ],
       ),
-      child: Column(
+          child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           // Battle header with app's gradient style
@@ -1883,98 +1890,123 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
             },
           ),
         ],
-      ),
+          ),
+        );
+      },
     );
   }
 
   Widget _buildPlayerCard(String avatar, String name, int score, int hearts, bool isCurrentUser) {
-    return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: isCurrentUser
-              ? [const Color(0xFF2196F3).withValues(alpha: 0.1), const Color(0xFF64B5F6).withValues(alpha: 0.1)]
-              : [const Color(0xFFFF9800).withValues(alpha: 0.1), const Color(0xFFFFB74D).withValues(alpha: 0.1)],
-        ),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isCurrentUser
-            ? const Color(0xFF2196F3).withValues(alpha: 0.3)
-            : const Color(0xFFFF9800).withValues(alpha: 0.3),
-          width: 1.5,
-        ),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Avatar with app's gradient colors - Much larger
-          UserAvatar(
-            avatar: avatar,
-            size: 60,
-            showBorder: true,
-            borderColor: isCurrentUser ? const Color(0xFF2196F3) : const Color(0xFFFF9800),
-            borderWidth: 2,
-            gradientColors: isCurrentUser
-                ? [const Color(0xFF2196F3), const Color(0xFF64B5F6)]
-                : [const Color(0xFFFF9800), const Color(0xFFFFB74D)],
-          ),
-          const SizedBox(height: 6),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isSmallScreen = MediaQuery.of(context).size.width < 360;
+        final avatarSize = isSmallScreen ? 45.0 : 60.0;
+        final cardPadding = isSmallScreen ? 6.0 : 8.0;
 
-          // Name with light theme styling - Larger
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.8),
-              borderRadius: BorderRadius.circular(10),
+        return Container(
+          padding: EdgeInsets.all(cardPadding),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: isCurrentUser
+                  ? [const Color(0xFF2196F3).withValues(alpha: 0.1), const Color(0xFF64B5F6).withValues(alpha: 0.1)]
+                  : [const Color(0xFFFF9800).withValues(alpha: 0.1), const Color(0xFFFFB74D).withValues(alpha: 0.1)],
             ),
-            child: Text(
-              name.length > 8 ? '${name.substring(0, 7)}...' : name,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF2C3E50),
-              ),
-              textAlign: TextAlign.center,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isCurrentUser
+                ? const Color(0xFF2196F3).withValues(alpha: 0.3)
+                : const Color(0xFFFF9800).withValues(alpha: 0.3),
+              width: 1.5,
             ),
           ),
-          const SizedBox(height: 4),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Responsive Avatar
+              UserAvatar(
+                avatar: avatar,
+                size: avatarSize,
+                showBorder: true,
+                borderColor: isCurrentUser ? const Color(0xFF2196F3) : const Color(0xFFFF9800),
+                borderWidth: 2,
+                gradientColors: isCurrentUser
+                    ? [const Color(0xFF2196F3), const Color(0xFF64B5F6)]
+                    : [const Color(0xFFFF9800), const Color(0xFFFFB74D)],
+              ),
+              SizedBox(height: isSmallScreen ? 4 : 6),
 
-          // Score with app colors - Larger
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF4CAF50), Color(0xFF66BB6A)],
+              // Responsive Name container
+              Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: isSmallScreen ? 6 : 8,
+                  vertical: isSmallScreen ? 3 : 4,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.8),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  name.length > (isSmallScreen ? 6 : 8)
+                      ? '${name.substring(0, isSmallScreen ? 5 : 7)}...'
+                      : name,
+                  style: TextStyle(
+                    fontSize: isSmallScreen ? 12 : 14,
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF2C3E50),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
               ),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              '$score',
-              style: const TextStyle(
-                fontSize: 16,
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          const SizedBox(height: 4),
+              SizedBox(height: isSmallScreen ? 3 : 4),
 
-          // Hearts with proper colors - Larger
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(5, (index) => Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 1),
-              child: Icon(
-                index < hearts ? Icons.favorite : Icons.favorite_border,
-                color: index < hearts ? Colors.red[400] : Colors.grey[300],
-                size: 14,
+              // Responsive Score container
+              Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: isSmallScreen ? 8 : 10,
+                  vertical: isSmallScreen ? 4 : 6,
+                ),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF4CAF50), Color(0xFF66BB6A)],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '$score',
+                  style: TextStyle(
+                    fontSize: isSmallScreen ? 14 : 16,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
-            )),
+              SizedBox(height: isSmallScreen ? 3 : 4),
+
+              // Hearts with responsive layout
+              LayoutBuilder(
+                builder: (context, heartConstraints) {
+                  // Calculate responsive heart size and spacing based on available width
+                  final availableWidth = heartConstraints.maxWidth;
+                  final heartSize = (availableWidth / 7).clamp(10.0, 16.0); // Dynamic size between 10-16
+                  final spacing = (availableWidth / 35).clamp(0.5, 2.0); // Dynamic spacing
+
+                  return Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: spacing,
+                    children: List.generate(5, (index) => Icon(
+                      index < hearts ? Icons.favorite : Icons.favorite_border,
+                      color: index < hearts ? Colors.red[400] : Colors.grey[300],
+                      size: heartSize,
+                    )),
+                  );
+                },
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -2260,7 +2292,40 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
     return answerWidget;
   }
 
-  Widget _buildGameEndDialog(bool isWinner, bool isDraw, int userScore, int opponentScore) {
+  String _getGameEndTitle(bool isWinner, bool isDraw, bool forfeit, String? forfeitBy) {
+    if (forfeit) {
+      final currentUserId = _duelService.currentUserId;
+      final didIForfeit = forfeitBy == currentUserId;
+
+      if (didIForfeit) {
+        return '😔 You Forfeited';
+      } else if (isWinner) {
+        return '🎉 Victory by Forfeit! 🎉';
+      } else {
+        return '👍 Win by Forfeit';
+      }
+    }
+
+    return isDraw
+        ? 'It\'s a Draw!'
+        : isWinner
+            ? '🎉 Victory! 🎉'
+            : '😔 Defeat';
+  }
+
+  String _getGameEndSubtitle(bool isWinner, String? forfeitBy) {
+    final currentUserId = _duelService.currentUserId;
+    final didIForfeit = forfeitBy == currentUserId;
+
+    if (didIForfeit) {
+      return 'You left the game early';
+    } else {
+      final opponentName = _opponentData?['name'] ?? 'Your opponent';
+      return '$opponentName left the game';
+    }
+  }
+
+  Widget _buildGameEndDialog(bool isWinner, bool isDraw, int userScore, int opponentScore, {bool forfeit = false, String? forfeitBy}) {
     if (isWinner) {
       _soundService.playVictory();
     } else {
@@ -2294,25 +2359,25 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              isDraw
-                  ? Icons.handshake
-                  : isWinner
-                      ? Icons.emoji_events
-                      : Icons.sentiment_dissatisfied,
+              forfeit
+                  ? (isWinner ? Icons.flag : Icons.person_off)
+                  : isDraw
+                      ? Icons.handshake
+                      : isWinner
+                          ? Icons.emoji_events
+                          : Icons.sentiment_dissatisfied,
               size: 80,
-              color: isDraw
-                  ? Colors.orange
-                  : isWinner
-                      ? Colors.amber
-                      : Colors.grey,
+              color: forfeit
+                  ? (isWinner ? Colors.amber : Colors.red)
+                  : isDraw
+                      ? Colors.orange
+                      : isWinner
+                          ? Colors.amber
+                          : Colors.grey,
             ),
             const SizedBox(height: 20),
             Text(
-              isDraw
-                  ? 'It\'s a Draw!'
-                  : isWinner
-                      ? '🎉 Victory! 🎉'
-                      : '😔 Defeat',
+              _getGameEndTitle(isWinner, isDraw, forfeit, forfeitBy),
               style: const TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.bold,
@@ -2320,6 +2385,17 @@ class _QuizDuelScreenState extends State<QuizDuelScreen> with TickerProviderStat
               ),
               textAlign: TextAlign.center,
             ),
+            if (forfeit) ...[
+              const SizedBox(height: 10),
+              Text(
+                _getGameEndSubtitle(isWinner, forfeitBy),
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: Colors.white70,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
             const SizedBox(height: 20),
             Container(
               padding: const EdgeInsets.all(16),

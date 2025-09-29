@@ -60,28 +60,28 @@ class _HomeContentState extends State<HomeContent> with TickerProviderStateMixin
       vsync: this,
     );
 
-    // Notification icon animation controller
+    // Notification icon animation controller - sync with popup duration
     _notificationIconController = AnimationController(
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 800), // Match popup animation duration
       vsync: this,
     );
 
-    // Scale animation for the icon (shrinks then grows back)
+    // Scale animation for the icon - iOS-style elastic effect
     _iconScaleAnimation = Tween<double>(
       begin: 1.0,
-      end: 0.8,
+      end: 1.3, // Grow larger like iOS icons
     ).animate(CurvedAnimation(
       parent: _notificationIconController,
-      curve: Curves.easeInOut,
+      curve: Curves.elasticOut,
     ));
 
-    // Rotation animation for cool effect
+    // Rotation animation for dramatic effect
     _iconRotationAnimation = Tween<double>(
       begin: 0.0,
-      end: 0.2,
+      end: 0.4, // More rotation
     ).animate(CurvedAnimation(
       parent: _notificationIconController,
-      curve: Curves.easeInOut,
+      curve: Curves.elasticOut,
     ));
 
     // Color animation to highlight the icon
@@ -90,7 +90,7 @@ class _HomeContentState extends State<HomeContent> with TickerProviderStateMixin
       end: Colors.orange.shade600,
     ).animate(CurvedAnimation(
       parent: _notificationIconController,
-      curve: Curves.easeInOut,
+      curve: Curves.elasticOut,
     ));
   }
 
@@ -981,16 +981,37 @@ class _HomeContentState extends State<HomeContent> with TickerProviderStateMixin
   }
 
   void _showNotifications() {
-    // Start icon animation
+    // Start icon animation synchronized with popup and HOLD it
     _notificationIconController.forward();
 
-    // Use the global notification popup service
-    _globalNotificationPopupService.showNotificationPanel(context);
+    // Get the position of the notification icon
+    final RenderBox? renderBox = _notificationIconKey.currentContext?.findRenderObject() as RenderBox?;
+    Offset? iconPosition;
 
-    // Reverse icon animation after a short delay (since the popup service manages its own timing)
-    Timer(const Duration(milliseconds: 500), () {
-      _notificationIconController.reverse();
-    });
+    if (renderBox != null) {
+      final position = renderBox.localToGlobal(Offset.zero);
+      final size = renderBox.size;
+      // Get center of the icon
+      iconPosition = Offset(
+        position.dx + (size.width / 2),
+        position.dy + (size.height / 2),
+      );
+    }
+
+    // Use the global notification popup service with origin position and close callback
+    _globalNotificationPopupService.showNotificationPanel(
+      context,
+      originPosition: iconPosition,
+      onClose: () {
+        // Only reverse animation when popup is actually closed
+        if (mounted) {
+          _notificationIconController.reverse();
+        }
+      },
+    );
+
+    // Remove the timer-based reverse since we now use the callback
+    // The animation will stay "lifted" until the popup closes
   }
 
   // Notification popup now handled by GlobalNotificationPopupService - DEPRECATED
