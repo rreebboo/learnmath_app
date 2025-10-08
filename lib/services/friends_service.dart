@@ -296,10 +296,26 @@ class FriendsService {
           .where('type', isEqualTo: 'outgoing')
           .where('status', isEqualTo: 'pending')
           .get();
-      
+
       if (existingOutgoingRequest.docs.isNotEmpty) {
         print('FriendsService: Request already sent');
         return false;
+      }
+
+      print('FriendsService: Checking for existing incoming request from target');
+      // Check if there's already an incoming request from the target user
+      final existingIncomingRequest = await firestore
+          .collection('users')
+          .doc(currentUserId)
+          .collection('friendRequests')
+          .where('fromUserId', isEqualTo: toUserId)
+          .where('type', isEqualTo: 'incoming')
+          .where('status', isEqualTo: 'pending')
+          .get();
+
+      if (existingIncomingRequest.docs.isNotEmpty) {
+        print('FriendsService: There is already an incoming request from this user - user should accept it manually');
+        return false; // Don't auto-accept, let user decide
       }
       
       print('FriendsService: Verifying target user exists');
@@ -439,10 +455,37 @@ class FriendsService {
       print('FriendsService: Committing batch transaction...');
       await batch.commit();
       print('FriendsService: ✅ Friend request accepted successfully!');
-      
+
+      // Send notification to the user who sent the friend request
+      try {
+        print('FriendsService: Preparing to send acceptance notification...');
+        print('FriendsService: Current user ID: $currentUserId, Target user ID: $fromUserId');
+
+        final currentUserDoc = await firestore.collection('users').doc(currentUserId).get();
+        print('FriendsService: Retrieved current user document');
+
+        final currentUserData = currentUserDoc.data();
+        final currentUserName = currentUserData?['name'] ?? 'Someone';
+        final currentUserAvatar = currentUserData?['avatar'] ?? '👤';
+
+        print('FriendsService: Sending notification from "$currentUserName" to user $fromUserId');
+
+        await _notificationService.sendFriendRequestResponseNotification(
+          toUserId: fromUserId,
+          fromUserId: currentUserId!,
+          fromUserName: currentUserName,
+          fromUserAvatar: currentUserAvatar,
+          accepted: true,
+        );
+        print('FriendsService: ✅ Successfully sent acceptance notification to $fromUserId');
+      } catch (e, stackTrace) {
+        print('FriendsService: ❌ ERROR sending acceptance notification: $e');
+        print('FriendsService: Stack trace: $stackTrace');
+      }
+
       // Clean up any remaining friend requests between these users
       await cleanupFriendRequests(currentUserId!, fromUserId);
-      
+
       return true;
     } catch (e, stackTrace) {
       print('FriendsService: ❌ ERROR accepting friend request: $e');
@@ -504,10 +547,37 @@ class FriendsService {
       print('FriendsService: Committing batch transaction...');
       await batch.commit();
       print('FriendsService: ✅ Friend request declined successfully!');
-      
+
+      // Send notification to the user who sent the friend request
+      try {
+        print('FriendsService: Preparing to send decline notification...');
+        print('FriendsService: Current user ID: $currentUserId, Target user ID: $fromUserId');
+
+        final currentUserDoc = await firestore.collection('users').doc(currentUserId).get();
+        print('FriendsService: Retrieved current user document');
+
+        final currentUserData = currentUserDoc.data();
+        final currentUserName = currentUserData?['name'] ?? 'Someone';
+        final currentUserAvatar = currentUserData?['avatar'] ?? '👤';
+
+        print('FriendsService: Sending decline notification from "$currentUserName" to user $fromUserId');
+
+        await _notificationService.sendFriendRequestResponseNotification(
+          toUserId: fromUserId,
+          fromUserId: currentUserId!,
+          fromUserName: currentUserName,
+          fromUserAvatar: currentUserAvatar,
+          accepted: false,
+        );
+        print('FriendsService: ✅ Successfully sent decline notification to $fromUserId');
+      } catch (e, stackTrace) {
+        print('FriendsService: ❌ ERROR sending decline notification: $e');
+        print('FriendsService: Stack trace: $stackTrace');
+      }
+
       // Clean up any remaining friend requests between these users
       await cleanupFriendRequests(currentUserId!, fromUserId);
-      
+
       return true;
     } catch (e, stackTrace) {
       print('FriendsService: ❌ ERROR declining friend request: $e');

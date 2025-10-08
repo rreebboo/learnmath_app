@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/friends_service.dart';
 import '../services/firestore_service.dart';
 import '../services/quiz_duel_service.dart';
@@ -8,7 +9,12 @@ import '../widgets/user_avatar.dart';
 import '../widgets/floating_challenge_widget.dart';
 
 class FriendsScreen extends StatefulWidget {
-  const FriendsScreen({super.key});
+  final int initialTabIndex;
+
+  const FriendsScreen({
+    super.key,
+    this.initialTabIndex = 0,
+  });
 
   @override
   State<FriendsScreen> createState() => _FriendsScreenState();
@@ -32,78 +38,12 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(
+      length: 3,
+      vsync: this,
+      initialIndex: widget.initialTabIndex,
+    );
     _loadUserData();
-    _testConnection();
-    _startPeriodicStatusRefresh();
-  }
-
-  // Automatically refresh status of visible search results periodically
-  void _startPeriodicStatusRefresh() {
-    Timer.periodic(const Duration(seconds: 5), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-      
-      // Only refresh if we have search results visible
-      if (_searchResults.isNotEmpty && !_isSearching) {
-        _refreshVisibleStatuses();
-      }
-    });
-  }
-
-  Future<void> _refreshVisibleStatuses() async {
-    try {
-      print('FriendsScreen: Auto-refreshing visible statuses...');
-      
-      // Check status for all visible search results
-      for (var user in _searchResults) {
-        final userId = user['id'];
-        final currentStatus = _relationshipStatus[userId] ?? 'none';
-        
-        // Only check if current status might be stale (pending or none)
-        if (currentStatus == 'pending' || currentStatus == 'none') {
-          final newStatus = await _friendsService.getCleanRelationshipStatus(userId);
-          
-          if (mounted && newStatus != currentStatus) {
-            setState(() {
-              _relationshipStatus[userId] = newStatus;
-            });
-            print('FriendsScreen: Auto-updated $userId: $currentStatus → $newStatus');
-          }
-        }
-      }
-    } catch (e) {
-      print('FriendsScreen: Error in auto status refresh: $e');
-    }
-  }
-
-  Future<void> _testConnection() async {
-    print('FriendsScreen: Running comprehensive friends functionality test...');
-    
-    // Run comprehensive test
-    final allTestsPassed = await _friendsService.testFriendsFunctionality();
-    
-    
-    // Run debug cleanup to remove any stale requests
-    print('FriendsScreen: Running debug cleanup...');
-    await _friendsService.debugCleanupAllRequests();
-    
-    // Provide user feedback based on test results
-    if (!allTestsPassed) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('❌ Friends system not working properly. Check your connection and permissions.'),
-            backgroundColor: Colors.red,
-            duration: Duration(seconds: 5),
-          ),
-        );
-      }
-    } else {
-      print('FriendsScreen: ✅ All friends functionality tests passed!');
-    }
   }
 
   // Method to refresh relationship status for a specific user
@@ -214,44 +154,6 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
           ),
         ),
         actions: [
-          // FORCE REFRESH BUTTON for debugging
-          IconButton(
-            icon: Icon(
-              Icons.refresh,
-              color: Colors.orange,
-              size: isSmallScreen ? 20 : 24,
-            ),
-            onPressed: () async {
-              print('🔄 MANUAL FORCE REFRESH ALL DATA');
-              
-              // Clear ALL cached status
-              setState(() {
-                _relationshipStatus.clear();
-              });
-              
-              // Aggressive cleanup - removes ALL friend requests to reset stuck states
-              await _friendsService.aggressiveCleanupAllRequests();
-              
-              // Wait for Firestore changes to propagate
-              await Future.delayed(const Duration(milliseconds: 1000));
-              
-              // If there are search results, refresh them
-              if (_searchResults.isNotEmpty) {
-                final query = _searchController.text;
-                if (query.isNotEmpty) {
-                  await _searchUsers(query);
-                }
-              }
-              
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('🔄 Force refreshed all friend data!'),
-                  backgroundColor: Colors.orange,
-                  duration: Duration(seconds: 2),
-                ),
-              );
-            },
-          ),
           IconButton(
             icon: Icon(
               Icons.person_add, 
@@ -391,64 +293,68 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
   Widget _buildFindTab() {
     final screenWidth = MediaQuery.of(context).size.width;
     final isSmallScreen = screenWidth < 360;
-    
-    return Padding(
-      padding: EdgeInsets.all(isSmallScreen ? 12 : 20),
-      child: Column(
-        children: [
-          // Search Bar
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(15),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, 3),
-                ),
-              ],
-            ),
-            child: TextField(
-              controller: _searchController,
-              onChanged: _searchUsers,
-              decoration: InputDecoration(
-                hintText: 'Search by name or username...',
-                hintStyle: TextStyle(color: Colors.grey[400]),
-                prefixIcon: const Icon(Icons.search, color: Color(0xFF5B9EF3)),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.all(16),
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
 
-          // Search Results
-          Expanded(
-            child: _isSearching
-                ? const Center(
-                    child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF5B9EF3)),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Padding(
+          padding: EdgeInsets.all(isSmallScreen ? 12 : 20),
+          child: Column(
+            children: [
+              // Search Bar
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(15),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
                     ),
-                  )
-                : _searchResults.isEmpty
-                    ? _buildEmptyState(
-                        icon: Icons.search,
-                        title: 'Search for Friends',
-                        subtitle: 'Enter a name or username to find friends',
-                        actionText: null,
-                        onAction: null,
+                  ],
+                ),
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: _searchUsers,
+                  decoration: InputDecoration(
+                    hintText: 'Search by name or username...',
+                    hintStyle: TextStyle(color: Colors.grey[400]),
+                    prefixIcon: const Icon(Icons.search, color: Color(0xFF5B9EF3)),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.all(16),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Search Results - Flexible to take remaining space
+              Flexible(
+                child: _isSearching
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF5B9EF3)),
+                        ),
                       )
-                    : ListView.builder(
-                        itemCount: _searchResults.length,
-                        itemBuilder: (context, index) {
-                          final user = _searchResults[index];
-                          return _buildSearchResultCard(user);
-                        },
-                      ),
+                    : _searchResults.isEmpty
+                        ? _buildEmptyState(
+                            icon: Icons.search,
+                            title: 'Search for Friends',
+                            subtitle: 'Enter a name or username to find friends',
+                            actionText: null,
+                            onAction: null,
+                          )
+                        : ListView.builder(
+                            itemCount: _searchResults.length,
+                            itemBuilder: (context, index) {
+                              final user = _searchResults[index];
+                              return _buildSearchResultCard(user);
+                            },
+                          ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -768,7 +674,8 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
         final screenWidth = MediaQuery.of(context).size.width;
         final isSmallScreen = screenWidth < 360;
         final isMediumScreen = screenWidth < 500;
-        
+        final userId = user['id'];
+
         return Container(
           margin: EdgeInsets.only(bottom: isSmallScreen ? 8 : 12),
           padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
@@ -834,11 +741,11 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
               ),
 
               SizedBox(width: isSmallScreen ? 6 : 12),
-              
-              // BIGGER BUTTON AREA - Fixed width for consistent button size
+
+              // Real-time action button using StreamBuilder
               SizedBox(
                 width: isSmallScreen ? 70 : 100,
-                child: _buildActionButton(user, isSmallScreen),
+                child: _buildRealTimeActionButton(user, isSmallScreen, userId),
               ),
             ],
           ),
@@ -847,9 +754,67 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
     );
   }
 
-  Widget _buildActionButton(Map<String, dynamic> user, bool isSmallScreen) {
+  Widget _buildRealTimeActionButton(Map<String, dynamic> user, bool isSmallScreen, String userId) {
+    final currentUserId = _friendsService.currentUserId;
+    if (currentUserId == null) {
+      return _buildActionButton(user, isSmallScreen, 'none');
+    }
+
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: _friendsService.getFriends(),
+      builder: (context, friendsSnapshot) {
+        return StreamBuilder<List<Map<String, dynamic>>>(
+          stream: _friendsService.getFriendRequests(),
+          builder: (context, incomingRequestsSnapshot) {
+            // Also check outgoing requests
+            return StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(currentUserId)
+                  .collection('friendRequests')
+                  .where('type', isEqualTo: 'outgoing')
+                  .where('toUserId', isEqualTo: userId)
+                  .where('status', isEqualTo: 'pending')
+                  .snapshots(),
+              builder: (context, outgoingRequestsSnapshot) {
+                // Determine relationship status from streams
+                String relationshipStatus = 'none';
+
+                // Check if already friends
+                if (friendsSnapshot.hasData) {
+                  final isFriend = friendsSnapshot.data!.any((f) => f['id'] == userId);
+                  if (isFriend) {
+                    relationshipStatus = 'friends';
+                  }
+                }
+
+                // Check if pending incoming friend request (they sent us a request)
+                if (relationshipStatus == 'none' && incomingRequestsSnapshot.hasData) {
+                  final hasPendingRequest = incomingRequestsSnapshot.data!.any((r) => r['fromUserId'] == userId);
+                  if (hasPendingRequest) {
+                    relationshipStatus = 'pending';
+                  }
+                }
+
+                // Check if we sent them an outgoing friend request
+                if (relationshipStatus == 'none' && outgoingRequestsSnapshot.hasData) {
+                  final hasOutgoingRequest = outgoingRequestsSnapshot.data!.docs.isNotEmpty;
+                  if (hasOutgoingRequest) {
+                    relationshipStatus = 'pending';
+                  }
+                }
+
+                return _buildActionButton(user, isSmallScreen, relationshipStatus);
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildActionButton(Map<String, dynamic> user, bool isSmallScreen, String relationshipStatus) {
     final userId = user['id'];
-    final relationshipStatus = _relationshipStatus[userId] ?? 'none';
     final isLoading = _sendingRequests[userId] == true;
     
     if (relationshipStatus == 'friends') {
@@ -888,44 +853,37 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
         ),
       );
     } else if (relationshipStatus == 'pending') {
-      return GestureDetector(
-        onTap: () async {
-          // FORCE REFRESH when pending button is tapped
-          print('🔄 FORCE REFRESH tapped for user: ${user['name']}');
-          await _refreshRelationshipStatus(userId);
-        },
-        child: Container(
-          width: double.infinity,
-          height: isSmallScreen ? 36 : 42,
-          decoration: BoxDecoration(
-            color: Colors.orange,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Center(
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.schedule,
-                  size: isSmallScreen ? 16 : 18,
-                  color: Colors.white,
-                ),
-                SizedBox(width: isSmallScreen ? 4 : 6),
-                Flexible(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      'Pending',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: isSmallScreen ? 12 : 14,
-                        fontWeight: FontWeight.bold,
-                      ),
+      return Container(
+        width: double.infinity,
+        height: isSmallScreen ? 36 : 42,
+        decoration: BoxDecoration(
+          color: Colors.orange,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Center(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.schedule,
+                size: isSmallScreen ? 16 : 18,
+                color: Colors.white,
+              ),
+              SizedBox(width: isSmallScreen ? 4 : 6),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    'Pending',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: isSmallScreen ? 12 : 14,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       );
@@ -984,65 +942,81 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
     String? actionText,
     VoidCallback? onAction,
   }) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(40),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                icon,
-                size: 40,
-                color: Colors.grey[400],
-              ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: constraints.maxHeight,
             ),
-            const SizedBox(height: 20),
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF2C3E50),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              subtitle,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[600],
-              ),
-            ),
-            if (actionText != null && onAction != null) ...[
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: onAction,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF5B9EF3),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+            child: IntrinsicHeight(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(40),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 80,
+                          height: 80,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[100],
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            icon,
+                            size: 40,
+                            color: Colors.grey[400],
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF2C3E50),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          subtitle,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                        if (actionText != null && onAction != null) ...[
+                          const SizedBox(height: 24),
+                          ElevatedButton(
+                            onPressed: onAction,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF5B9EF3),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: Text(
+                              actionText,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
-                ),
-                child: Text(
-                  actionText,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                ],
               ),
-            ],
-          ],
-        ),
-      ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -1432,11 +1406,6 @@ class _FriendsScreenState extends State<FriendsScreen> with TickerProviderStateM
           
           // Immediate status refresh after successful operation
           await _refreshRelationshipStatus(userId);
-          
-          // Also trigger refresh for other search results (in case of related changes)
-          Future.delayed(const Duration(milliseconds: 500), () {
-            if (mounted) _refreshVisibleStatuses();
-          });
         }
       } else {
         print('FriendsScreen: Failed to send friend request');

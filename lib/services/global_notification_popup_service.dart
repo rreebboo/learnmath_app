@@ -6,9 +6,9 @@ import 'dart:math' as math;
 import '../models/notification.dart';
 import '../widgets/user_avatar.dart';
 import '../screens/quiz_duel_screen.dart';
+import '../screens/friends_screen.dart';
 import '../services/quiz_duel_service.dart';
 import '../services/notification_service.dart';
-
 
 class GlobalNotificationPopupService {
   static final GlobalNotificationPopupService _instance = GlobalNotificationPopupService._internal();
@@ -21,17 +21,14 @@ class GlobalNotificationPopupService {
   OverlayState? _overlayState;
   VoidCallback? _onCloseCallback;
   final NotificationService _notificationService = NotificationService();
-
-  // For animated list management
-  final GlobalKey<AnimatedListState> _listKey = GlobalKey<AnimatedListState>();
-  // ignore: prefer_final_fields - List contents are modified
-  List<AppNotification> _notifications = [];
-  final Set<String> _deletingIds = {};
+  final Map<String, bool> _deletingNotifications = {};
+  final Set<String> _manuallyDeletedIds = {};
+  List<AppNotification>? _cachedNotifications;
+  ScrollController? _scrollController;
 
   // For iOS-style grow animation
   Offset? _iconPosition;
   bool _isClosing = false;
-
 
   void showNotificationPopup(BuildContext context, AppNotification notification) {
     if (_isShowing) {
@@ -62,7 +59,7 @@ class GlobalNotificationPopupService {
       // Haptic feedback
       HapticFeedback.lightImpact();
     } catch (e) {
-      // Handle error silently and cleanup
+      print('Error showing notification popup: $e');
       _cleanup();
     }
   }
@@ -106,7 +103,7 @@ class GlobalNotificationPopupService {
         }
       }
     } catch (e) {
-      // Handle error silently
+      print('Error hiding notification popup: $e');
     } finally {
       _cleanup();
     }
@@ -119,208 +116,13 @@ class GlobalNotificationPopupService {
     _overlayState = null;
     _isShowing = false;
     _onCloseCallback = null;
-    _notifications.clear();
-    _deletingIds.clear();
     _iconPosition = null;
     _isClosing = false;
-  }
-
-  void _updateNotificationsList(List<AppNotification> newNotifications) {
-    // Handle new notifications (additions)
-    // Process in reverse order since we insert at index 0, so newest will end up at top
-    final notificationsToAdd = <AppNotification>[];
-
-    for (final newNotification in newNotifications) {
-      if (!_notifications.any((n) => n.id == newNotification.id)) {
-        notificationsToAdd.add(newNotification);
-      }
-    }
-
-    // Add in reverse order so that when we insert at index 0,
-    // the final order matches the original stream order (newest first)
-    for (int i = notificationsToAdd.length - 1; i >= 0; i--) {
-      _notifications.insert(0, notificationsToAdd[i]);
-      _listKey.currentState?.insertItem(0);
-    }
-
-    // Handle removed notifications (deletions)
-    final List<AppNotification> toRemove = [];
-    for (int i = _notifications.length - 1; i >= 0; i--) {
-      final notification = _notifications[i];
-      if (!newNotifications.any((n) => n.id == notification.id) &&
-          !_deletingIds.contains(notification.id)) {
-        toRemove.add(notification);
-      }
-    }
-
-    for (final notification in toRemove) {
-      final index = _notifications.indexOf(notification);
-      if (index != -1) {
-        _notifications.removeAt(index);
-        _listKey.currentState?.removeItem(
-          index,
-          (context, animation) => _buildAnimatedNotificationItem(
-            context,
-            notification,
-            animation,
-            MediaQuery.of(context).size.width < 360,
-          ),
-        );
-      }
-    }
-  }
-
-  void _animateDeleteNotification(String notificationId) {
-    final index = _notifications.indexWhere((n) => n.id == notificationId);
-    if (index == -1) return;
-
-    // Mark as deleting to prevent premature removal
-    _deletingIds.add(notificationId);
-
-    final notification = _notifications[index];
-    _notifications.removeAt(index);
-
-    // Animate removal
-    _listKey.currentState?.removeItem(
-      index,
-      (context, animation) {
-        return SlideTransition(
-          position: animation.drive(
-            Tween<Offset>(
-              begin: Offset.zero,
-              end: const Offset(1.0, 0.0),
-            ).chain(CurveTween(curve: Curves.easeInBack)),
-          ),
-          child: FadeTransition(
-            opacity: Tween<double>(begin: 1.0, end: 0.0).animate(animation),
-            child: _buildNotificationCard(
-              context,
-              notification,
-              MediaQuery.of(context).size.width < 360,
-            ),
-          ),
-        );
-      },
-      duration: const Duration(milliseconds: 400),
-    );
-
-    // Actually delete from Firestore after animation
-    Timer(const Duration(milliseconds: 450), () {
-      _deletingIds.remove(notificationId);
-      _notificationService.deleteNotification(notificationId);
-    });
-  }
-
-  void _animateClearAllNotifications() {
-    // Get all current notifications that are visible in the list
-    final currentNotifications = List<AppNotification>.from(_notifications);
-
-    if (currentNotifications.isEmpty) {
-      // If no notifications to clear, just call the service
-      _notificationService.clearAllNotifications();
-      return;
-    }
-
-    // Mark all as deleting to prevent premature removal
-    for (final notification in currentNotifications) {
-      _deletingIds.add(notification.id);
-    }
-
-    // Animate removal from top to bottom (normal order) with clean slide animation
-    for (int i = 0; i < currentNotifications.length; i++) {
-      final notification = currentNotifications[i];
-
-      // Add staggered delay
-      Timer(Duration(milliseconds: i * 100), () {
-        // Find current index in the actual list
-        final currentIndex = _notifications.indexWhere((n) => n.id == notification.id);
-        if (currentIndex == -1) return;
-
-        // Remove from local list
-        final removedNotification = _notifications.removeAt(currentIndex);
-
-        // Clean slide animation
-        _listKey.currentState?.removeItem(
-          currentIndex,
-          (context, animation) {
-            return SlideTransition(
-              position: animation.drive(
-                Tween<Offset>(
-                  begin: Offset.zero,
-                  end: const Offset(1.0, 0.0),
-                ).chain(CurveTween(curve: Curves.easeInBack)),
-              ),
-              child: FadeTransition(
-                opacity: Tween<double>(begin: 1.0, end: 0.0).animate(animation),
-                child: _buildNotificationCard(
-                  context,
-                  removedNotification,
-                  MediaQuery.of(context).size.width < 360,
-                ),
-              ),
-            );
-          },
-          duration: const Duration(milliseconds: 400),
-        );
-      });
-    }
-
-    // Clear from Firestore after all animations complete
-    final totalAnimationTime = (currentNotifications.length * 100) + 450;
-    Timer(Duration(milliseconds: totalAnimationTime), () {
-      for (final notification in currentNotifications) {
-        _deletingIds.remove(notification.id);
-      }
-      _notificationService.clearAllNotifications();
-    });
-  }
-
-  void _animateMarkAsRead(String notificationId) {
-    // Find the notification in local list
-    final index = _notifications.indexWhere((n) => n.id == notificationId);
-    if (index == -1) return;
-
-    // Mark as read in Firestore first
-    _notificationService.markAsRead(notificationId);
-
-    // Update local notification state
-    final updatedNotification = _notifications[index].copyWith(isRead: true);
-    _notifications[index] = updatedNotification;
-
-    // Force a simple rebuild by removing and inserting the item
-    _listKey.currentState?.removeItem(
-      index,
-      (context, animation) => const SizedBox.shrink(),
-      duration: const Duration(milliseconds: 1),
-    );
-
-    // Insert the updated notification immediately
-    Timer(const Duration(milliseconds: 2), () {
-      _listKey.currentState?.insertItem(
-        index,
-        duration: const Duration(milliseconds: 300),
-      );
-    });
-  }
-
-  Widget _buildAnimatedNotificationItem(
-    BuildContext context,
-    AppNotification notification,
-    Animation<double> animation,
-    bool isSmallScreen,
-  ) {
-    return SlideTransition(
-      position: animation.drive(
-        Tween<Offset>(
-          begin: const Offset(1.0, 0.0),
-          end: Offset.zero,
-        ).chain(CurveTween(curve: Curves.easeOut)),
-      ),
-      child: FadeTransition(
-        opacity: Tween<double>(begin: 0.0, end: 1.0).animate(animation),
-        child: _buildNotificationCard(context, notification, isSmallScreen),
-      ),
-    );
+    _cachedNotifications = null;
+    _deletingNotifications.clear();
+    _manuallyDeletedIds.clear();
+    _scrollController?.dispose();
+    _scrollController = null;
   }
 
   Widget _buildNotificationPopup(BuildContext context, AppNotification notification) {
@@ -376,9 +178,49 @@ class GlobalNotificationPopupService {
       // Haptic feedback
       HapticFeedback.lightImpact();
     } catch (e) {
-      // Handle error silently and cleanup
+      print('Error showing notification panel: $e');
       _cleanup();
     }
+  }
+
+  Widget _buildNotificationIconOrImage(NotificationType type, Map<String, dynamic>? data, bool isSmallScreen) {
+    // Check if it's a friend request response and use Flutter icons
+    if (type == NotificationType.friendRequestResponse && data != null) {
+      final bool? accepted = data['accepted'] as bool?;
+      final IconData iconData = accepted == true
+          ? Icons.person_add_alt_1
+          : Icons.person_remove;
+      final Color iconColor = accepted == true
+          ? Colors.green.shade600
+          : Colors.orange.shade600;
+
+      return Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: iconColor.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(
+          iconData,
+          color: iconColor,
+          size: isSmallScreen ? 20 : 24,
+        ),
+      );
+    }
+
+    // Default icon-based notification
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: _getNotificationColor(type).withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Icon(
+        _getNotificationIcon(type),
+        color: _getNotificationColor(type),
+        size: isSmallScreen ? 20 : 24,
+      ),
+    );
   }
 
   IconData _getNotificationIcon(NotificationType type) {
@@ -387,6 +229,8 @@ class GlobalNotificationPopupService {
         return Icons.sports_martial_arts;
       case NotificationType.friendRequest:
         return Icons.person_add;
+      case NotificationType.friendRequestResponse:
+        return Icons.people; // People icon for friend request responses
       case NotificationType.achievement:
         return Icons.emoji_events;
       default:
@@ -399,12 +243,48 @@ class GlobalNotificationPopupService {
       case NotificationType.duelChallenge:
         return Colors.orange.shade600;
       case NotificationType.friendRequest:
-        return Colors.green.shade600;
+        return Colors.blue.shade600;
+      case NotificationType.friendRequestResponse:
+        return Colors.blue.shade600; // Blue for friend request responses
       case NotificationType.achievement:
         return Colors.amber.shade600;
       default:
         return Colors.amber.shade600;
     }
+  }
+
+  String _cleanTitle(String title) {
+    // Remove emojis from title except 🎉
+    return title
+        .replaceAll('👥✓', '')
+        .replaceAll('👤✗', '')
+        .replaceAll('👥', '')
+        .replaceAll('👤', '')
+        .replaceAll('✓', '')
+        .replaceAll('✗', '')
+        .trim();
+  }
+
+  Color _getTitleColor(NotificationType type, Map<String, dynamic>? data) {
+    if (type == NotificationType.friendRequestResponse && data != null) {
+      final bool? accepted = data['accepted'] as bool?;
+      return accepted == true
+          ? Colors.green.shade600  // Accepted - Green
+          : Colors.orange.shade600; // Declined - Orange
+    } else if (type == NotificationType.friendRequest) {
+      return Colors.blue.shade600; // Friend request sent - Blue
+    }
+    return const Color(0xFF2C3E50); // Default color
+  }
+
+  Color _getBorderColor(NotificationType type, Map<String, dynamic>? data) {
+    if (type == NotificationType.friendRequestResponse && data != null) {
+      final bool? accepted = data['accepted'] as bool?;
+      return accepted == true
+          ? Colors.green.shade600  // Accepted - Green
+          : Colors.orange.shade600; // Declined - Orange
+    }
+    return _getNotificationColor(type); // Use default notification color
   }
 
   Widget _buildDuelChallengePopup(BuildContext context, AppNotification notification, bool isSmallScreen) {
@@ -455,9 +335,9 @@ class GlobalNotificationPopupService {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        notification.title,
+                        _cleanTitle(notification.title),
                         style: TextStyle(
-                          color: const Color(0xFF2C3E50),
+                          color: _getTitleColor(notification.type, notification.data),
                           fontSize: isSmallScreen ? 14 : 16,
                           fontWeight: FontWeight.bold,
                         ),
@@ -613,14 +493,15 @@ class GlobalNotificationPopupService {
   Widget _buildGenericNotificationPopup(BuildContext context, AppNotification notification, bool isSmallScreen) {
     return GestureDetector(
       onTap: () {
-        showNotificationPanel(context);
+        hideNotificationPopup();
+        _handleNotificationCardTap(context, notification);
       },
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: _getNotificationColor(notification.type).withValues(alpha: 0.3),
+            color: _getBorderColor(notification.type, notification.data).withValues(alpha: 0.3),
             width: 2,
           ),
           boxShadow: [
@@ -635,18 +516,7 @@ class GlobalNotificationPopupService {
           padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
           child: Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: _getNotificationColor(notification.type).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  _getNotificationIcon(notification.type),
-                  color: _getNotificationColor(notification.type),
-                  size: isSmallScreen ? 20 : 24,
-                ),
-              ),
+              _buildNotificationIconOrImage(notification.type, notification.data, isSmallScreen),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -654,9 +524,9 @@ class GlobalNotificationPopupService {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      notification.title,
+                      _cleanTitle(notification.title),
                       style: TextStyle(
-                        color: const Color(0xFF2C3E50),
+                        color: _getTitleColor(notification.type, notification.data),
                         fontSize: isSmallScreen ? 14 : 16,
                         fontWeight: FontWeight.bold,
                       ),
@@ -697,196 +567,58 @@ class GlobalNotificationPopupService {
   }
 
   Future<void> _acceptChallenge(BuildContext context, AppNotification notification) async {
-    OverlayEntry? loadingOverlay;
+    hideNotificationPopup();
 
-    try {
-      print('_acceptChallenge: Starting challenge acceptance');
-      print('Notification data: ${notification.data}');
+    // Mark notification as read
+    _notificationService.markAsRead(notification.id);
 
-      // Validate notification data
-      if (notification.data == null || notification.data!['duelId'] == null) {
-        throw Exception('Invalid notification data: missing duelId');
-      }
+    // Update the game state so FloatingChallengeWidget can detect the acceptance
+    if (notification.data != null && notification.data!['duelId'] != null) {
+      await QuizDuelService().acceptChallenge(notification.data!['duelId']);
+    }
 
-      // Mark notification as read first
-      _notificationService.markAsRead(notification.id);
+    // Send notification to challenger that challenge was accepted
+    await _sendChallengeResponseNotification(
+      toUserId: notification.fromUserId,
+      fromUserName: notification.fromUserName ?? 'Unknown User',
+      accepted: true,
+    );
 
-      // Show loading indicator using overlay to ensure it's always visible and closeable
-      final overlayState = Overlay.of(context);
-      loadingOverlay = OverlayEntry(
-        builder: (context) => Material(
-          type: MaterialType.transparency,
-          child: Container(
-            color: Colors.black.withValues(alpha: 0.5),
-            child: const Center(
-              child: Card(
-                child: Padding(
-                  padding: EdgeInsets.all(20.0),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      CircularProgressIndicator(),
-                      SizedBox(width: 16),
-                      Text('Accepting challenge...'),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+    // Check if context is still mounted before navigation
+    if (!context.mounted) return;
+
+    // Navigate to quiz duel screen if duelId is available
+    if (notification.data != null && notification.data!['duelId'] != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => QuizDuelScreen(
+            gameId: notification.data!['duelId'],
+            topicName: notification.data!['topicName'] ?? 'Mixed Topics',
+            operator: 'mixed', // Default operator for challenges
+            difficulty: notification.data!['difficulty'] ?? 'Medium',
           ),
         ),
       );
-      overlayState.insert(loadingOverlay);
-
-      // Accept the challenge
-      final duelId = notification.data!['duelId'] as String;
-      print('_acceptChallenge: Attempting to accept duel: $duelId');
-
-      final success = await QuizDuelService().acceptChallenge(duelId);
-      print('_acceptChallenge: Accept result: $success');
-
-      // Close loading overlay
-      loadingOverlay.remove();
-      loadingOverlay = null;
-
-      if (success) {
-        print('_acceptChallenge: Success - proceeding with navigation');
-
-        // Send notification to challenger that challenge was accepted
-        await _sendChallengeResponseNotification(
-          toUserId: notification.fromUserId,
-          fromUserName: notification.fromUserName ?? 'Unknown User',
-          accepted: true,
-        );
-
-        // Check if context is still mounted before navigation
-        if (!context.mounted) {
-          print('_acceptChallenge: Context no longer mounted - cannot navigate');
-          return;
-        }
-
-        print('_acceptChallenge: Navigating to QuizDuelScreen with gameId: $duelId');
-
-        // Hide the notification popup BEFORE navigation to prevent issues
-        hideNotificationPopup();
-
-        // Navigate to quiz duel screen
-        await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => QuizDuelScreen(
-              gameId: duelId,
-              topicName: notification.data!['topicName'] ?? 'Mixed Topics',
-              operator: 'mixed',
-              difficulty: notification.data!['difficulty'] ?? 'Medium',
-            ),
-          ),
-        );
-
-        print('_acceptChallenge: Navigation completed');
-
-        // Show success message
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Challenge accepted! Get ready to duel!'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
-      } else {
-        print('_acceptChallenge: Challenge acceptance failed (success = false)');
-        // Hide the notification popup even if failed
-        hideNotificationPopup();
-
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Failed to accept challenge. It may have expired.'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      print('_acceptChallenge: Error occurred: $e');
-
-      // Close loading overlay if still open
-      if (loadingOverlay != null) {
-        try {
-          loadingOverlay.remove();
-        } catch (_) {}
-        loadingOverlay = null;
-      }
-
-      // Hide the notification popup
-      hideNotificationPopup();
-
-      if (context.mounted) {
-        String errorMessage = 'Error accepting challenge. Please try again.';
-
-        // Provide specific error messages
-        if (e.toString().contains('missing duelId')) {
-          errorMessage = 'Challenge data is invalid. Please try refreshing.';
-        } else if (e.toString().contains('no longer exists')) {
-          errorMessage = 'This challenge has expired or been cancelled.';
-        } else if (e.toString().contains('not pending')) {
-          errorMessage = 'This challenge has already been accepted or declined.';
-        }
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
     }
   }
 
   Future<void> _declineChallenge(BuildContext context, AppNotification notification) async {
-    try {
-      // Hide the notification popup first
-      hideNotificationPopup();
+    hideNotificationPopup();
 
-      // Mark notification as read
-      _notificationService.markAsRead(notification.id);
+    // Mark notification as read
+    _notificationService.markAsRead(notification.id);
 
-      // Decline the challenge
-      if (notification.data != null && notification.data!['duelId'] != null) {
-        await QuizDuelService().declineChallenge(notification.data!['duelId']);
-      }
+    // Send notification to challenger that challenge was declined
+    await _sendChallengeResponseNotification(
+      toUserId: notification.fromUserId,
+      fromUserName: notification.fromUserName ?? 'Unknown User',
+      accepted: false,
+    );
 
-      // Send notification to challenger that challenge was declined
-      await _sendChallengeResponseNotification(
-        toUserId: notification.fromUserId,
-        fromUserName: notification.fromUserName ?? 'Unknown User',
-        accepted: false,
-      );
-
-      // Show feedback message
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Declined challenge from ${notification.fromUserName ?? 'Unknown User'}'),
-            backgroundColor: Colors.orange,
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
-    } catch (e) {
-      // Hide popup anyway
-      hideNotificationPopup();
-
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Error declining challenge'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+    // Handle declining the challenge - could update the duel status
+    if (notification.data != null && notification.data!['duelId'] != null) {
+      QuizDuelService().declineChallenge(notification.data!['duelId']);
     }
   }
 
@@ -911,9 +643,10 @@ class GlobalNotificationPopupService {
             if (_iconPosition == null) {
               // Fallback to center animation if no icon position
               return Transform.scale(
-                scale: value.clamp(0.0, 1.0),
+                scale: 0.8 + (0.2 * value),
+                alignment: Alignment.topCenter,
                 child: Opacity(
-                  opacity: value.clamp(0.0, 1.0),
+                  opacity: value,
                   child: child!,
                 ),
               );
@@ -958,23 +691,22 @@ class GlobalNotificationPopupService {
               ),
             );
           },
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 800),
-            curve: Curves.elasticOut,
+          child: Container(
             height: screenHeight * 0.7,
             decoration: BoxDecoration(
               color: const Color(0xFFF5F7FA),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: Colors.orange.withValues(alpha: 0.3),
-                width: 2,
-              ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.25),
-                  blurRadius: 25,
-                  offset: const Offset(0, 12),
-                  spreadRadius: 2,
+                  color: Colors.orange.withValues(alpha: 0.3),
+                  blurRadius: 8,
+                  spreadRadius: 1,
+                  offset: const Offset(0, 0),
+                ),
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.1),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
                 ),
               ],
             ),
@@ -990,87 +722,83 @@ class GlobalNotificationPopupService {
                       topRight: Radius.circular(20),
                     ),
                   ),
-                  child: Row(
-                    children: [
-                      StreamBuilder<List<AppNotification>>(
-                        stream: _notificationService.streamUserNotifications(),
-                        builder: (context, snapshot) {
-                          final notifications = snapshot.data ?? [];
-                          final hasUnread = notifications.any((n) => !n.isRead);
+                  child: StreamBuilder<List<AppNotification>>(
+                    stream: _notificationService.streamUserNotifications(),
+                    builder: (context, snapshot) {
+                      final notifications = snapshot.data ?? [];
+                      final hasUnread = notifications.any((n) => !n.isRead);
 
-                          // Adjust title size based on whether Mark all button is present
-                          final titleFontSize = hasUnread
-                              ? (isSmallScreen ? 16.0 : 18.0)  // Smaller when Mark all is present
-                              : (isSmallScreen ? 18.0 : 20.0); // Normal size when Mark all is not present
-
-                          return Expanded(
-                            child: Text(
-                              'Notifications',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: titleFontSize,
-                                color: const Color(0xFF2C3E50),
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                      return Row(
+                        children: [
+                          Text(
+                            'Notifications',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: isSmallScreen ? 16 : (hasUnread ? 18 : 20),
+                              color: const Color(0xFF2C3E50),
                             ),
-                          );
-                        },
-                      ),
-                      StreamBuilder<List<AppNotification>>(
-                        stream: _notificationService.streamUserNotifications(),
-                        builder: (context, snapshot) {
-                          final notifications = snapshot.data ?? [];
-                          final hasUnread = notifications.any((n) => !n.isRead);
-
-                          return Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (hasUnread)
-                                TextButton(
-                                  onPressed: () {
-                                    // Check if context is still mounted before performing action
-                                    if (context.mounted) {
-                                      _notificationService.markAllAsRead();
-                                    }
-                                  },
-                                  child: Text(
-                                    'Mark all',
-                                    style: TextStyle(
-                                      color: Colors.amber.shade700,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 14,
-                                    ),
-                                  ),
+                          ),
+                          const Spacer(),
+                          if (hasUnread)
+                            TextButton(
+                              onPressed: () {
+                                // Check if context is still mounted before performing action
+                                if (context.mounted) {
+                                  _notificationService.markAllAsRead();
+                                }
+                              },
+                              style: TextButton.styleFrom(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: isSmallScreen ? 8 : 12,
+                                  vertical: 4,
                                 ),
-                              TextButton(
-                                onPressed: () {
-                                  // Show dialog while keeping the notification panel open
-                                  if (context.mounted) {
-                                    _showClearAllDialog(context);
-                                  }
-                                },
-                                child: const Text(
-                                  'Clear All',
-                                  style: TextStyle(
-                                    color: Colors.orange,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 14,
-                                  ),
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              child: Text(
+                                'Mark all',
+                                style: TextStyle(
+                                  color: Colors.amber.shade700,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: isSmallScreen ? 12 : 14,
                                 ),
                               ),
-                              IconButton(
-                                onPressed: hideNotificationPopup,
-                                icon: const Icon(
-                                  Icons.close,
-                                  color: Color(0xFF2C3E50),
-                                ),
-                              ),
-                            ],
-                          );
-                        },
-                      ),
-                    ],
+                            ),
+                          IconButton(
+                            onPressed: () async {
+                              if (context.mounted) {
+                                // Temporarily hide the panel to show dialog on top
+                                final shouldClear = await _showClearAllDialogOnTop(context);
+                                if (shouldClear == true) {
+                                  _notificationService.clearAllNotifications();
+                                  // Panel will rebuild automatically when notifications are cleared
+                                }
+                              }
+                            },
+                            icon: Icon(
+                              Icons.delete_sweep,
+                              color: Colors.orange.shade600,
+                              size: isSmallScreen ? 20 : 24,
+                            ),
+                            padding: const EdgeInsets.all(8),
+                            constraints: const BoxConstraints(),
+                            tooltip: 'Clear All',
+                          ),
+                          const SizedBox(width: 4),
+                          IconButton(
+                            onPressed: hideNotificationPopup,
+                            icon: Icon(
+                              Icons.close,
+                              color: const Color(0xFF2C3E50),
+                              size: isSmallScreen ? 20 : 24,
+                            ),
+                            padding: const EdgeInsets.all(8),
+                            constraints: const BoxConstraints(),
+                            tooltip: 'Close',
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ),
                 // Notification List
@@ -1086,31 +814,73 @@ class GlobalNotificationPopupService {
                         );
                       }
 
-                      final newNotifications = snapshot.data ?? [];
-                      _updateNotificationsList(newNotifications);
+                      final notifications = snapshot.data ?? [];
 
-                      if (_notifications.isEmpty) {
+                      // Filter out manually deleted notifications
+                      final filteredNotifications = notifications
+                          .where((n) => !_manuallyDeletedIds.contains(n.id))
+                          .toList();
+
+                      // Only update cache if there are actual changes (not during deletion animation)
+                      if (_cachedNotifications == null || _deletingNotifications.isEmpty) {
+                        _cachedNotifications = filteredNotifications;
+                      } else {
+                        // During deletion, preserve the cache but add any new notifications
+                        final newNotifications = filteredNotifications
+                            .where((n) => !_cachedNotifications!.any((cached) => cached.id == n.id))
+                            .toList();
+
+                        if (newNotifications.isNotEmpty) {
+                          _cachedNotifications = [..._cachedNotifications!, ...newNotifications];
+                        }
+                      }
+
+                      // Check if truly empty (no notifications and nothing being deleted)
+                      if (_cachedNotifications!.isEmpty && _deletingNotifications.isEmpty) {
                         return _buildEmptyNotificationState(isSmallScreen);
                       }
 
-                      return AnimatedList(
-                        key: _listKey,
+                      // Initialize scroll controller if not exists
+                      _scrollController ??= ScrollController();
+
+                      return ListView.builder(
+                        controller: _scrollController,
+                        key: const ValueKey('notification_list'),
                         padding: EdgeInsets.symmetric(
                           horizontal: isSmallScreen ? 12 : 16,
                           vertical: 8,
                         ),
-                        initialItemCount: _notifications.length,
-                        itemBuilder: (context, index, animation) {
-                          if (index >= _notifications.length) {
+                        itemCount: _cachedNotifications!.length,
+                        addAutomaticKeepAlives: true,
+                        cacheExtent: 1000,
+                        itemBuilder: (context, index) {
+                          // Bounds check to prevent RangeError
+                          if (index >= _cachedNotifications!.length) {
                             return const SizedBox.shrink();
                           }
 
-                          final notification = _notifications[index];
-                          return _buildAnimatedNotificationItem(
-                            context,
-                            notification,
-                            animation,
-                            isSmallScreen,
+                          final notification = _cachedNotifications![index];
+                          final isDeleting = _deletingNotifications[notification.id] ?? false;
+
+                          return AnimatedSize(
+                            key: ValueKey('size_${notification.id}'),
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeOut,
+                            child: AnimatedOpacity(
+                              duration: const Duration(milliseconds: 250),
+                              opacity: isDeleting ? 0.0 : 1.0,
+                              child: AnimatedSlide(
+                                duration: const Duration(milliseconds: 300),
+                                curve: Curves.easeOut,
+                                offset: isDeleting ? const Offset(1, 0) : Offset.zero,
+                                child: isDeleting
+                                    ? SizedBox(
+                                        height: 0,
+                                        key: ValueKey('deleting_${notification.id}'),
+                                      )
+                                    : _buildNotificationCard(context, notification, isSmallScreen),
+                              ),
+                            ),
                           );
                         },
                       );
@@ -1168,174 +938,187 @@ class GlobalNotificationPopupService {
   }
 
   Widget _buildNotificationCard(BuildContext context, AppNotification notification, bool isSmallScreen) {
-    return Container(
-      margin: EdgeInsets.only(bottom: isSmallScreen ? 6 : 8),
-      child: Material(
-        borderRadius: BorderRadius.circular(12),
-        color: notification.isRead ? Colors.white : Colors.amber.shade50,
-        elevation: notification.isRead ? 1 : 2,
-        child: InkWell(
+    return TweenAnimationBuilder<double>(
+      key: ValueKey(notification.id),
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutQuart,
+      tween: Tween<double>(begin: 0, end: 1),
+      builder: (context, value, child) {
+        return Transform.scale(
+          scale: value,
+          alignment: Alignment.center,
+          child: Opacity(
+            opacity: value,
+            child: child,
+          ),
+        );
+      },
+      child: Container(
+        margin: EdgeInsets.only(bottom: isSmallScreen ? 6 : 8),
+        child: Material(
           borderRadius: BorderRadius.circular(12),
-          onTap: () => _handleNotificationCardTap(context, notification),
-          child: Container(
-            padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
-            child: Row(
+          color: notification.isRead ? Colors.white : Colors.amber.shade50,
+          elevation: notification.isRead ? 1 : 2,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => _handleNotificationCardTap(context, notification),
+            child: Container(
+              padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
+              child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildCardNotificationIcon(notification.type, isSmallScreen),
-                SizedBox(width: isSmallScreen ? 8 : 12),
-                Expanded(
-                  flex: 3,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+              _buildCardNotificationIcon(notification.type, isSmallScreen, data: notification.data),
+              SizedBox(width: isSmallScreen ? 8 : 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _cleanTitle(notification.title),
+                            style: TextStyle(
+                              fontSize: isSmallScreen ? 14 : 16,
+                              fontWeight: notification.isRead
+                                  ? FontWeight.w500
+                                  : FontWeight.w600,
+                              color: _getTitleColor(notification.type, notification.data),
+                            ),
+                            softWrap: true,
+                          ),
+                        ),
+                        if (!notification.isRead)
+                          Container(
+                            width: 8,
+                            height: 8,
+                            margin: const EdgeInsets.only(top: 4, left: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.shade600,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      notification.message,
+                      style: TextStyle(
+                        fontSize: isSmallScreen ? 12 : 14,
+                        color: Colors.grey[600],
+                        height: 1.3,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 3,
+                    ),
+                    if (notification.fromUserName != null) ...[
+                      SizedBox(height: isSmallScreen ? 6 : 8),
                       Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Flexible(
+                          UserAvatar(
+                            avatar: notification.fromUserAvatar ?? '👤',
+                            size: isSmallScreen ? 20 : 24,
+                          ),
+                          SizedBox(width: isSmallScreen ? 6 : 8),
+                          Expanded(
                             child: Text(
-                              notification.title,
+                              'From ${notification.fromUserName}',
                               style: TextStyle(
-                                fontSize: isSmallScreen ? 13 : 15,
-                                fontWeight: notification.isRead
-                                    ? FontWeight.w500
-                                    : FontWeight.w600,
-                                color: const Color(0xFF2C3E50),
+                                fontSize: isSmallScreen ? 10 : 12,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.grey[600],
                               ),
                               overflow: TextOverflow.ellipsis,
-                              maxLines: isSmallScreen ? 1 : 2,
                             ),
                           ),
-                          if (!notification.isRead)
-                            Container(
-                              width: 6,
-                              height: 6,
-                              margin: const EdgeInsets.only(top: 4, left: 6),
-                              decoration: BoxDecoration(
-                                color: Colors.amber.shade600,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
                         ],
                       ),
-                      const SizedBox(height: 3),
-                      Text(
-                        notification.message,
-                        style: TextStyle(
-                          fontSize: isSmallScreen ? 11 : 13,
-                          color: Colors.grey[600],
-                          height: 1.3,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: isSmallScreen ? 2 : 3,
-                      ),
-                      if (notification.fromUserName != null) ...[
-                        SizedBox(height: isSmallScreen ? 4 : 6),
-                        Row(
-                          children: [
-                            UserAvatar(
-                              avatar: notification.fromUserAvatar ?? '👤',
-                              size: isSmallScreen ? 16 : 20,
-                            ),
-                            SizedBox(width: isSmallScreen ? 4 : 6),
-                            Flexible(
-                              child: Text(
-                                'From ${notification.fromUserName}',
-                                style: TextStyle(
-                                  fontSize: isSmallScreen ? 9 : 11,
-                                  fontWeight: FontWeight.w500,
-                                  color: Colors.grey[600],
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                      SizedBox(height: isSmallScreen ? 4 : 6),
-                      Text(
-                        _formatTimeAgo(notification.createdAt),
-                        style: TextStyle(
-                          fontSize: isSmallScreen ? 9 : 11,
-                          color: Colors.grey[500],
-                        ),
-                      ),
                     ],
-                  ),
-                ),
-                SizedBox(width: isSmallScreen ? 6 : 8),
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (!notification.isRead)
-                      GestureDetector(
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          _animateMarkAsRead(notification.id);
-                        },
-                        child: Container(
-                          padding: EdgeInsets.all(isSmallScreen ? 6 : 8),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(6),
-                            color: Colors.blue.withValues(alpha: 0.1),
-                          ),
-                          child: Icon(
-                            Icons.mark_email_read,
-                            size: isSmallScreen ? 12 : 14,
-                            color: Colors.blue,
-                          ),
-                        ),
-                      ),
-                    SizedBox(height: isSmallScreen ? 4 : 6),
-                    GestureDetector(
-                      onTap: () {
-                        HapticFeedback.lightImpact();
-                        _animateDeleteNotification(notification.id);
-                      },
-                      child: Container(
-                        padding: EdgeInsets.all(isSmallScreen ? 6 : 8),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(6),
-                          color: Colors.orange.withValues(alpha: 0.1),
-                        ),
-                        child: Icon(
-                          Icons.delete,
-                          size: isSmallScreen ? 12 : 14,
-                          color: Colors.orange,
-                        ),
+                    SizedBox(height: isSmallScreen ? 6 : 8),
+                    Text(
+                      _formatTimeAgo(notification.createdAt),
+                      style: TextStyle(
+                        fontSize: isSmallScreen ? 10 : 12,
+                        color: Colors.grey[500],
                       ),
                     ),
                   ],
                 ),
-              ],
-            ),
+              ),
+              SizedBox(width: isSmallScreen ? 4 : 8),
+              IconButton(
+                icon: Icon(
+                  Icons.delete_outline,
+                  size: isSmallScreen ? 18 : 20,
+                  color: Colors.orange.shade600,
+                ),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                onPressed: () async {
+                  // Add to manually deleted set to prevent re-appearance from stream
+                  _manuallyDeletedIds.add(notification.id);
+
+                  // Mark as deleting to trigger animation
+                  _deletingNotifications[notification.id] = true;
+
+                  // Rebuild to show animation (cache is preserved)
+                  _overlayEntry?.markNeedsBuild();
+
+                  // Wait for animation to complete
+                  await Future.delayed(const Duration(milliseconds: 350));
+
+                  // Delete from Firestore
+                  _notificationService.deleteNotification(notification.id);
+
+                  // Remove from cache now that animation is done
+                  _cachedNotifications?.removeWhere((n) => n.id == notification.id);
+
+                  // Clean up deleting state
+                  _deletingNotifications.remove(notification.id);
+
+                  // Rebuild to show updated list without the deleted item
+                  _overlayEntry?.markNeedsBuild();
+                },
+                tooltip: 'Delete',
+              ),
+            ],
           ),
         ),
+      ),
+    ),
       ),
     );
   }
 
-  Widget _buildCardNotificationIcon(NotificationType type, bool isSmallScreen) {
-    IconData icon;
-    Color color;
+  Widget _buildCardNotificationIcon(NotificationType type, bool isSmallScreen, {Map<String, dynamic>? data}) {
+    // Check if it's a friend request response and use Flutter icons
+    if (type == NotificationType.friendRequestResponse && data != null) {
+      final bool? accepted = data['accepted'] as bool?;
+      final IconData iconData = accepted == true
+          ? Icons.person_add_alt_1
+          : Icons.person_remove;
+      final Color iconColor = accepted == true
+          ? Colors.green.shade600
+          : Colors.orange.shade600;
 
-    switch (type) {
-      case NotificationType.duelChallenge:
-        icon = Icons.sports_martial_arts;
-        color = Colors.orange.shade600;
-        break;
-      case NotificationType.friendRequest:
-        icon = Icons.person_add;
-        color = Colors.green.shade600;
-        break;
-      case NotificationType.achievement:
-        icon = Icons.emoji_events;
-        color = Colors.amber.shade600;
-        break;
-      default:
-        icon = Icons.info;
-        color = Colors.amber.shade600;
+      return Container(
+        padding: EdgeInsets.all(isSmallScreen ? 6 : 8),
+        decoration: BoxDecoration(
+          color: iconColor.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(
+          iconData,
+          color: iconColor,
+          size: isSmallScreen ? 18 : 20,
+        ),
+      );
     }
+
+    // Default icon-based notification
+    final icon = _getNotificationIcon(type);
+    final color = _getNotificationColor(type);
 
     return Container(
       padding: EdgeInsets.all(isSmallScreen ? 6 : 8),
@@ -1352,39 +1135,32 @@ class GlobalNotificationPopupService {
   }
 
   void _handleNotificationCardTap(BuildContext context, AppNotification notification) {
-    print('_handleNotificationCardTap: Card tapped!');
-    print('_handleNotificationCardTap: Notification ID: ${notification.id}');
-    print('_handleNotificationCardTap: Notification type: ${notification.type}');
-    print('_handleNotificationCardTap: Notification data: ${notification.data}');
-
     // Check if context is still mounted before proceeding
-    if (!context.mounted) {
-      print('_handleNotificationCardTap: Context not mounted, returning');
-      return;
-    }
+    if (!context.mounted) return;
 
     // Mark as read if not already read
     if (!notification.isRead) {
-      print('_handleNotificationCardTap: Marking notification as read');
       NotificationService().markAsRead(notification.id);
     }
 
     // Handle specific notification types
     switch (notification.type) {
       case NotificationType.duelChallenge:
-        print('_handleNotificationCardTap: Handling duel challenge from panel');
-        // For notification panel, show confirmation dialog
-        _handleDuelChallenge(context, notification);
+        if (context.mounted) {
+          _handleDuelChallenge(context, notification);
+        }
         break;
       case NotificationType.friendRequest:
-        print('_handleNotificationCardTap: Handling friend request');
-        hideNotificationPopup();
         if (context.mounted) {
           _handleFriendRequest(context, notification);
         }
         break;
       default:
-        print('_handleNotificationCardTap: Unknown notification type: ${notification.type}');
+        // For general notifications, open the notification panel
+        if (!_isShowing || _overlayEntry == null) {
+          // Only show panel if it's not already showing
+          showNotificationPanel(context);
+        }
         break;
     }
   }
@@ -1393,276 +1169,158 @@ class GlobalNotificationPopupService {
     // Check if context is still mounted before proceeding
     if (!context.mounted) return;
 
-    print('_handleDuelChallenge: Starting dialog for notification');
-    print('_handleDuelChallenge: Notification type: ${notification.type}');
-    print('_handleDuelChallenge: Notification data: ${notification.data}');
-
     final duelId = notification.data?['duelId'] as String?;
-    print('_handleDuelChallenge: Extracted duelId: $duelId');
 
-    if (duelId == null || duelId.isEmpty) {
-      print('_handleDuelChallenge: ERROR - Invalid duelId');
+    if (duelId == null) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Invalid challenge data - missing duel ID')),
+          const SnackBar(content: Text('Invalid challenge data')),
         );
       }
       return;
     }
 
-    // Create a high z-index overlay for the dialog to appear above notification panel
-    final overlayState = Overlay.of(context);
-    if (!overlayState.mounted) return;
-
-    late OverlayEntry dialogOverlay;
-
-    dialogOverlay = OverlayEntry(
-      builder: (overlayContext) => Material(
-        type: MaterialType.transparency,
-        child: Container(
-          color: Colors.black.withValues(alpha: 0.5), // Semi-transparent background
-          child: Center(
-            child: AlertDialog(
-              elevation: 50, // Very high elevation to appear above notification panel
-              backgroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-              title: Row(
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        title: Row(
+          children: [
+            UserAvatar(
+              avatar: notification.fromUserAvatar ?? '🦊',
+              size: 40,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  UserAvatar(
-                    avatar: notification.fromUserAvatar ?? '🦊',
-                    size: 40,
+                  const Text(
+                    '🔢 Math Duel Challenge!',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          '🔢 Math Duel Challenge!',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                        ),
-                        Text(
-                          'from ${notification.fromUserName ?? 'Unknown'}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
-                            fontWeight: FontWeight.normal,
-                          ),
-                        ),
-                      ],
+                  Text(
+                    'from ${notification.fromUserName ?? 'Unknown'}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                      fontWeight: FontWeight.normal,
                     ),
                   ),
                 ],
               ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    '${notification.fromUserName ?? 'Someone'} wants to challenge you to a math duel!',
-                    style: const TextStyle(fontSize: 14),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Are you ready to show your math skills?',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () async {
-                    dialogOverlay.remove();
-                    if (context.mounted) {
-                      await _declineDialogChallenge(context, duelId, notification);
-                    }
-                  },
-                  child: const Text(
-                    'Decline',
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                ),
-                ElevatedButton(
-                  onPressed: () async {
-                    dialogOverlay.remove();
-                    if (context.mounted) {
-                      await _acceptDialogChallenge(context, duelId, notification);
-                    }
-                  },
-                  child: const Text('Accept Challenge'),
-                ),
-              ],
             ),
-          ),
+          ],
         ),
-      ),
-    );
-
-    overlayState.insert(dialogOverlay);
-  }
-
-  void _handleFriendRequest(BuildContext context, AppNotification notification) {
-    // Check if context is still mounted before proceeding
-    if (!context.mounted) return;
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('🤝 Friend Request'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('${notification.fromUserName} wants to be your friend!'),
+            Text(
+              '${notification.fromUserName ?? 'Someone'} wants to challenge you to a math duel!',
+              style: const TextStyle(fontSize: 14),
+            ),
             const SizedBox(height: 16),
-            const Text('Do you want to accept this friend request?'),
+            const Text(
+              'Are you ready to show your math skills?',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
           ],
         ),
         actions: [
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               if (context.mounted) {
                 Navigator.pop(context);
+                await _declineDialogChallenge(context, duelId, notification);
               }
             },
-            child: const Text('Decline'),
+            child: const Text(
+              'Decline',
+              style: TextStyle(color: Colors.grey),
+            ),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               if (context.mounted) {
                 Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Friend request functionality will be implemented soon!'),
-                  ),
-                );
+                await _acceptDialogChallenge(context, duelId, notification);
               }
             },
-            child: const Text('Accept'),
+            child: const Text('Accept Challenge'),
           ),
         ],
       ),
     );
   }
 
-  // Dialog-based challenge acceptance (alternative approach)
+  void _handleFriendRequest(BuildContext context, AppNotification notification) {
+    // Check if context is still mounted before proceeding
+    if (!context.mounted) return;
+
+    // Hide the notification popup/panel
+    hideNotificationPopup();
+
+    // Navigate to Friends screen with Requests tab (index 1)
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const FriendsScreen(initialTabIndex: 1),
+      ),
+    );
+  }
+
   Future<void> _acceptDialogChallenge(BuildContext context, String duelId, AppNotification notification) async {
-    OverlayEntry? loadingOverlay;
-
     try {
-      print('_acceptDialogChallenge: Starting dialog-based challenge acceptance');
-      print('_acceptDialogChallenge: DuelId: $duelId');
-      print('_acceptDialogChallenge: Notification data: ${notification.data}');
-      print('_acceptDialogChallenge: Context mounted: ${context.mounted}');
-
-      // Validate duelId
-      if (duelId.isEmpty) {
-        print('_acceptDialogChallenge: ERROR - DuelId is empty');
-        throw Exception('Invalid duelId: empty string');
-      }
-
-      // Show loading indicator using overlay to ensure it's always visible and closeable
-      final overlayState = Overlay.of(context);
-      loadingOverlay = OverlayEntry(
-        builder: (context) => Material(
-          type: MaterialType.transparency,
-          child: Container(
-            color: Colors.black.withValues(alpha: 0.5),
-            child: const Center(
-              child: Card(
-                child: Padding(
-                  padding: EdgeInsets.all(20.0),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      CircularProgressIndicator(),
-                      SizedBox(width: 16),
-                      Text('Accepting challenge...'),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const AlertDialog(
+          content: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 16),
+              Text('Accepting challenge...'),
+            ],
           ),
         ),
       );
-      overlayState.insert(loadingOverlay);
 
-      print('_acceptDialogChallenge: About to call QuizDuelService().acceptChallenge()');
       final success = await QuizDuelService().acceptChallenge(duelId);
-      print('_acceptDialogChallenge: Accept result: $success');
-      print('_acceptDialogChallenge: Context still mounted after service call: ${context.mounted}');
-
-      // Close loading overlay
-      loadingOverlay.remove();
-      loadingOverlay = null;
 
       // Check if context is still mounted before UI operations
       if (!context.mounted) return;
 
-      if (success) {
-        print('_acceptDialogChallenge: Success - proceeding with navigation');
+      // Always close loading dialog first
+      Navigator.pop(context);
 
-        try {
-          // Send notification to challenger
-          print('_acceptDialogChallenge: Sending response notification...');
-          await _sendChallengeResponseNotification(
-            toUserId: notification.fromUserId,
-            fromUserName: notification.fromUserName ?? 'Unknown User',
-            accepted: true,
-          );
-          print('_acceptDialogChallenge: Response notification sent successfully');
-        } catch (e) {
-          print('_acceptDialogChallenge: Error sending response notification: $e');
-          // Continue anyway - navigation is more important
-        }
+      if (success) {
+        // Send notification to challenger
+        await _sendChallengeResponseNotification(
+          toUserId: notification.fromUserId,
+          fromUserName: notification.fromUserName ?? 'Unknown User',
+          accepted: true,
+        );
 
         // Check context again after async operation
-        if (!context.mounted) {
-          print('_acceptDialogChallenge: Context no longer mounted - cannot navigate');
-          return;
-        }
+        if (!context.mounted) return;
 
         final topicName = notification.data?['topicName'] as String? ?? 'Math Duel';
         final difficulty = notification.data?['difficulty'] as String? ?? 'medium';
 
-        print('_acceptDialogChallenge: Navigating to QuizDuelScreen with gameId: $duelId');
-        print('_acceptDialogChallenge: topicName: $topicName, difficulty: $difficulty');
-
-        // Hide the notification panel BEFORE navigation to prevent conflicts
-        hideNotificationPopup();
-
-        print('_acceptDialogChallenge: Starting navigation...');
-        print('_acceptDialogChallenge: Creating QuizDuelScreen with gameId: $duelId');
-
         // Navigate to duel screen with gameId
-        final duelScreen = QuizDuelScreen(
-          topicName: topicName,
-          operator: 'mixed',
-          difficulty: difficulty,
-          gameId: duelId,
-        );
-
-        print('_acceptDialogChallenge: QuizDuelScreen created, about to navigate');
-
-        try {
-          await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => duelScreen,
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => QuizDuelScreen(
+              topicName: topicName,
+              operator: 'mixed',
+              difficulty: difficulty,
+              gameId: duelId,
             ),
-          );
-          print('_acceptDialogChallenge: Navigation completed successfully');
-        } catch (e) {
-          print('_acceptDialogChallenge: Error during navigation: $e');
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Navigation error: $e'),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-          return;
-        }
+          ),
+        );
 
         // Show success message
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1673,7 +1331,6 @@ class GlobalNotificationPopupService {
           ),
         );
       } else {
-        print('_acceptDialogChallenge: Challenge acceptance failed (success = false)');
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Failed to accept challenge. It may have expired.'),
@@ -1682,31 +1339,19 @@ class GlobalNotificationPopupService {
         );
       }
     } catch (e) {
-      print('_acceptDialogChallenge: Error occurred: $e');
+      print('Error accepting challenge: $e');
 
-      // Close loading overlay if still open
-      if (loadingOverlay != null) {
-        try {
-          loadingOverlay.remove();
-        } catch (_) {}
-        loadingOverlay = null;
-      }
-
+      // Make sure loading dialog is closed
       if (context.mounted) {
-        String errorMessage = 'Failed to accept challenge. Please try again.';
-
-        // Provide specific error messages
-        if (e.toString().contains('Invalid duelId')) {
-          errorMessage = 'Challenge data is invalid. Please try refreshing.';
-        } else if (e.toString().contains('no longer exists')) {
-          errorMessage = 'This challenge has expired or been cancelled.';
-        } else if (e.toString().contains('not pending')) {
-          errorMessage = 'This challenge has already been accepted or declined.';
+        try {
+          Navigator.pop(context);
+        } catch (popError) {
+          // Loading dialog might already be closed
         }
 
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
+          const SnackBar(
+            content: Text('Failed to accept challenge. Please try again.'),
             backgroundColor: Colors.red,
           ),
         );
@@ -1714,7 +1359,6 @@ class GlobalNotificationPopupService {
     }
   }
 
-  // Dialog-based challenge decline (alternative approach)
   Future<void> _declineDialogChallenge(BuildContext context, String duelId, AppNotification notification) async {
     try {
       final success = await QuizDuelService().declineChallenge(duelId);
@@ -1758,81 +1402,121 @@ class GlobalNotificationPopupService {
     }
   }
 
-  void _showClearAllDialog(BuildContext context) {
+  Future<bool?> _showClearAllDialogOnTop(BuildContext context) async {
     // Double-check context is still mounted before showing dialog
-    if (!context.mounted) return;
+    if (!context.mounted) return null;
 
-    // Create a separate overlay entry for the dialog with higher z-index
-    final overlayState = Overlay.of(context);
-    if (!overlayState.mounted) return;
+    // Create a completer to handle the async result
+    final completer = Completer<bool?>();
 
-    late OverlayEntry dialogOverlay;
-
-    dialogOverlay = OverlayEntry(
-      builder: (overlayContext) => Material(
-        type: MaterialType.transparency,
-        child: Container(
-          color: Colors.black.withValues(alpha: 0.7), // Dark background
-          child: Center(
-            child: AlertDialog(
-              elevation: 30, // Very high elevation
-              backgroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+    // Create an overlay entry for the dialog that appears on top of the notification panel
+    final dialogOverlay = OverlayEntry(
+      builder: (context) => TweenAnimationBuilder<double>(
+        duration: const Duration(milliseconds: 200),
+        tween: Tween<double>(begin: 0, end: 1),
+        curve: Curves.easeOut,
+        builder: (context, value, child) {
+          return Opacity(
+            opacity: value,
+            child: Material(
+              color: Colors.black.withValues(alpha: 0.6 * value),
+              child: Center(
+                child: Transform.scale(
+                  scale: 0.8 + (0.2 * value),
+                  child: child,
+                ),
               ),
-              title: const Text(
-                'Clear All Notifications',
+            ),
+          );
+        },
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Row(
+            children: [
+              Icon(
+                Icons.delete_sweep,
+                color: Colors.orange.shade600,
+                size: 28,
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'Clear All Notifications',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: const Text(
+            'Are you sure you want to clear all notifications? This action cannot be undone.',
+            style: TextStyle(fontSize: 14),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                if (!completer.isCompleted) {
+                  completer.complete(false);
+                }
+              },
+              child: Text(
+                'Cancel',
+                style: TextStyle(
+                  color: Colors.grey.shade700,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (!completer.isCompleted) {
+                  completer.complete(true);
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange.shade600,
+                foregroundColor: Colors.white,
+                elevation: 2,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              ),
+              child: const Text(
+                'Clear All',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
-                  fontSize: 18,
                 ),
               ),
-              content: const Text(
-                'Are you sure you want to clear all notifications? This action cannot be undone.',
-                style: TextStyle(fontSize: 16),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    dialogOverlay.remove();
-                  },
-                  child: const Text(
-                    'Cancel',
-                    style: TextStyle(fontSize: 16),
-                  ),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    dialogOverlay.remove();
-                    _animateClearAllNotifications();
-                    // Keep the notification panel open after clearing
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    foregroundColor: Colors.white,
-                    elevation: 4,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: const Text(
-                    'Clear All',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
             ),
-          ),
+          ],
         ),
       ),
     );
 
+    // Insert dialog overlay on top of notification panel
+    final overlayState = Overlay.of(context);
     overlayState.insert(dialogOverlay);
-  }
 
+    // Wait for user response
+    final result = await completer.future;
+
+    // Remove the dialog overlay with a smooth fade out
+    try {
+      await Future.delayed(const Duration(milliseconds: 150));
+      if (overlayState.mounted) {
+        dialogOverlay.remove();
+      }
+    } catch (e) {
+      dialogOverlay.remove();
+    }
+
+    return result;
+  }
 
   String _formatTimeAgo(DateTime dateTime) {
     final now = DateTime.now();
@@ -1894,9 +1578,9 @@ class GlobalNotificationPopupService {
         },
       );
 
-      // Challenge response notification sent successfully
+      print('Challenge response notification sent successfully');
     } catch (e) {
-      // Handle error silently
+      print('Error sending challenge response notification: $e');
     }
   }
 
@@ -1904,7 +1588,7 @@ class GlobalNotificationPopupService {
     try {
       hideNotificationPopup();
     } catch (e) {
-      // Handle error silently during disposal
+      print('Error during disposal: $e');
     } finally {
       _cleanup();
     }

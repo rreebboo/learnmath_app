@@ -59,27 +59,32 @@ class _GlobalNotificationListenerState extends State<GlobalNotificationListener>
   }
 
   void _checkForNewNotifications(List<AppNotification> currentNotifications) {
-    print('GlobalNotificationListener: Checking for new notifications');
-    print('GlobalNotificationListener: Current notifications count: ${currentNotifications.length}');
-    print('GlobalNotificationListener: Last notifications count: ${_lastNotifications.length}');
-
     // Find notifications that weren't in the last check
     final newNotifications = currentNotifications.where((notification) {
       return !_lastNotifications.any((lastNotification) =>
         lastNotification.id == notification.id);
     }).toList();
 
-    print('GlobalNotificationListener: Found ${newNotifications.length} new notifications');
+    // Filter only unread notifications
+    final unreadNewNotifications = newNotifications.where((n) => !n.isRead).toList();
+
+    // Only log if there are actually new unread notifications
+    if (unreadNewNotifications.isNotEmpty) {
+      print('GlobalNotificationListener: Found ${unreadNewNotifications.length} new unread notifications');
+    }
 
     // Show popup for new unread notifications
-    for (final notification in newNotifications) {
-      print('GlobalNotificationListener: Processing notification: ${notification.title}, isRead: ${notification.isRead}');
-      if (!notification.isRead) {
-        print('GlobalNotificationListener: Showing popup for notification: ${notification.title}');
-        _popupService.showNotificationPopup(context, notification);
-        // Only show one popup at a time
-        break;
+    for (final notification in unreadNewNotifications) {
+      print('GlobalNotificationListener: Showing popup for: ${notification.title}');
+      try {
+        if (mounted) {
+          _popupService.showNotificationPopup(context, notification);
+        }
+      } catch (e) {
+        print('GlobalNotificationListener: Error showing notification popup: $e');
       }
+      // Only show one popup at a time
+      break;
     }
 
     _lastNotifications = List.from(currentNotifications);

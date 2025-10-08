@@ -108,6 +108,7 @@ class NotificationService {
         message: '$fromUserName wants to challenge you to a math duel!',
         type: NotificationType.duelChallenge,
         fromUserId: currentUserId!,
+        toUserId: toUserId,
         fromUserName: fromUserName,
         fromUserAvatar: fromUserAvatar,
         data: {
@@ -153,6 +154,7 @@ class NotificationService {
         message: '$fromUserName sent you a friend request!',
         type: NotificationType.friendRequest,
         fromUserId: currentUserId!,
+        toUserId: toUserId,
         fromUserName: fromUserName,
         fromUserAvatar: fromUserAvatar,
         data: {
@@ -213,6 +215,7 @@ class NotificationService {
         message: message,
         type: notificationType,
         fromUserId: currentUserId!,
+        toUserId: toUserId,
         fromUserName: fromUserName,
         fromUserAvatar: fromUserAvatar,
         data: data,
@@ -230,6 +233,67 @@ class NotificationService {
       print('General notification sent to $toUserId');
     } catch (e) {
       print('Error sending general notification: $e');
+    }
+  }
+
+  // Send friend request response notification (accepted or declined)
+  Future<void> sendFriendRequestResponseNotification({
+    required String toUserId,
+    required String fromUserId,
+    required String fromUserName,
+    required String fromUserAvatar,
+    required bool accepted,
+  }) async {
+    print('NotificationService: sendFriendRequestResponseNotification called');
+    print('NotificationService: toUserId=$toUserId, fromUserId=$fromUserId, fromUserName=$fromUserName, accepted=$accepted');
+
+    if (!_isFirebaseInitialized) {
+      print('NotificationService: ERROR - Firebase not initialized!');
+      return;
+    }
+
+    try {
+      final title = accepted
+          ? 'Friend Request Accepted! 🎉'
+          : 'Friend Request Declined!';
+
+      final message = accepted
+          ? '$fromUserName accepted your friend request. You can now challenge each other!'
+          : '$fromUserName declined your friend request.';
+
+      print('NotificationService: Creating notification - title: "$title"');
+      print('NotificationService: Message: "$message"');
+
+      final notification = AppNotification(
+        id: '',
+        title: title,
+        message: message,
+        type: NotificationType.friendRequestResponse,
+        fromUserId: fromUserId,
+        toUserId: toUserId,
+        fromUserName: fromUserName,
+        fromUserAvatar: fromUserAvatar,
+        data: {
+          'type': 'friend_request_response',
+          'accepted': accepted,
+          'responderId': fromUserId,
+        },
+        createdAt: DateTime.now(),
+      );
+
+      print('NotificationService: Writing to Firestore path: users/$toUserId/notifications');
+
+      final docRef = await _firestore
+          .collection('users')
+          .doc(toUserId)
+          .collection('notifications')
+          .add(notification.toFirestore());
+
+      print('NotificationService: ✅ Notification written successfully with ID: ${docRef.id}');
+      print('NotificationService: Friend request response notification sent to $toUserId (accepted: $accepted)');
+    } catch (e, stackTrace) {
+      print('NotificationService: ❌ ERROR sending friend request response notification: $e');
+      print('NotificationService: Stack trace: $stackTrace');
     }
   }
 
@@ -329,6 +393,7 @@ class NotificationService {
         message: 'This is a test notification to verify the system is working!',
         type: NotificationType.general,
         fromUserId: currentUserId!,
+        toUserId: toUserId,
         fromUserName: 'Test System',
         fromUserAvatar: '🤖',
         data: {

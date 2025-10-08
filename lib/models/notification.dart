@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 enum NotificationType {
   duelChallenge,
   friendRequest,
+  friendRequestResponse,
   achievement,
   general,
 }
@@ -13,6 +14,7 @@ class AppNotification {
   final String message;
   final NotificationType type;
   final String fromUserId;
+  final String toUserId;
   final String? fromUserName;
   final String? fromUserAvatar;
   final Map<String, dynamic>? data;
@@ -25,6 +27,7 @@ class AppNotification {
     required this.message,
     required this.type,
     required this.fromUserId,
+    required this.toUserId,
     this.fromUserName,
     this.fromUserAvatar,
     this.data,
@@ -43,6 +46,7 @@ class AppNotification {
         orElse: () => NotificationType.general,
       ),
       fromUserId: data['fromUserId'] ?? '',
+      toUserId: data['toUserId'] ?? '',
       fromUserName: data['fromUserName'],
       fromUserAvatar: data['fromUserAvatar'],
       data: data['data'] as Map<String, dynamic>?,
@@ -57,6 +61,7 @@ class AppNotification {
       'message': message,
       'type': type.name,
       'fromUserId': fromUserId,
+      'toUserId': toUserId,
       'fromUserName': fromUserName,
       'fromUserAvatar': fromUserAvatar,
       'data': data,
@@ -71,6 +76,7 @@ class AppNotification {
     String? message,
     NotificationType? type,
     String? fromUserId,
+    String? toUserId,
     String? fromUserName,
     String? fromUserAvatar,
     Map<String, dynamic>? data,
@@ -83,6 +89,7 @@ class AppNotification {
       message: message ?? this.message,
       type: type ?? this.type,
       fromUserId: fromUserId ?? this.fromUserId,
+      toUserId: toUserId ?? this.toUserId,
       fromUserName: fromUserName ?? this.fromUserName,
       fromUserAvatar: fromUserAvatar ?? this.fromUserAvatar,
       data: data ?? this.data,

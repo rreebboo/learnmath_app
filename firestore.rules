@@ -110,7 +110,10 @@ service cloud.firestore {
         allow read: if isAuthenticated() && isOwner(userId);
 
         // Authenticated users can create notifications for others (for friend requests, challenges, etc.)
-        allow create: if isAuthenticated();
+        // Prevent notification spam by validating the notification has required fields
+        allow create: if isAuthenticated() &&
+          request.resource.data.keys().hasAll(['title', 'message', 'type', 'fromUserId', 'createdAt']) &&
+          request.resource.data.toUserId == userId;
 
         // Users can update their own notifications (mark as read, etc.)
         allow update: if isAuthenticated() && isOwner(userId);
